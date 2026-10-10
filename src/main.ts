@@ -6,5 +6,6 @@ async function bootstrap() {
     instrument: ObserveInstrument,
   });
   await app.listen(process.env.PORT ?? 3000);
+  console.log("Application running on " + process.env.PORT);
 }
 await bootstrap();
