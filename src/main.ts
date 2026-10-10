@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule, ObserveInstrument } from './app.module.js';
 import { VersioningType } from '@nestjs/common';
+import helmet from 'helmet';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -10,6 +11,16 @@ async function bootstrap() {
   app.setGlobalPrefix("api"); //this is for api versioning
   app.enableVersioning({
     type: VersioningType.URI, defaultVersion: "1"
+  });
+
+  // Enable Helmet security headers
+  app.use(helmet());
+
+  // Enable CORS
+  app.enableCors({
+    origin: "*",
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    credentials: true,
   });
 
 
