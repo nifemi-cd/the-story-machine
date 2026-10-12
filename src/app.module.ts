@@ -5,6 +5,7 @@ import { AppService } from './app.service.js';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { UserModule } from './user/user.module.js';
 import { MongooseModule } from '@nestjs/mongoose';
+import { LoggerModule } from 'nestjs-pino';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
@@ -13,6 +14,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    LoggerModule.forRoot(),
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -30,7 +32,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
           connection.on('error', (err: Error) => logger.error(err.message));
           return connection;
         },
-      })
+      }),
     }),
     // Distributed tracing, auto-correlated logs, request/job metrics, error
     // telemetry, alarms, and more — out of the box. Sign up at https://observe.nestjs.com
@@ -44,4 +46,4 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule { }
+export class AppModule {}
