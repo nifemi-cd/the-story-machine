@@ -29,6 +29,21 @@ describe('ParseObjectIdPipe', () => {
       expect(error).toMatchObject({ errors: [{ field: 'id' }] });
     },
   );
+
+  it('names the route parameter in the error', () => {
+    const error = (() => {
+      try {
+        pipe.transform('123', { type: 'param', data: 'storyId' });
+      } catch (e) {
+        return e;
+      }
+    })();
+
+    expect(error).toMatchObject({
+      message: 'Invalid storyId',
+      errors: [{ field: 'storyId' }],
+    });
+  });
 });
 
 describe('toFieldErrors', () => {

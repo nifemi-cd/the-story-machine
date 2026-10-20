@@ -10,20 +10,32 @@ import { ApiErrorDoc, PaginationMetaDoc } from './api-response.docs.js';
  * @param options.status HTTP status, 200 by default
  * @param options.description shown next to the status, usually the @ResponseMessage
  * @param options.paginated true when `data` is a list with pagination `meta`
+ * @param options.isArray true when `data` is a whole list with no `meta`
  *
  * @example
  * @ApiEnvelope(UserResponseDto, { status: 201, description: 'User created' })
  */
 export function ApiEnvelope(
   model: Type<unknown>,
-  options: { status?: number; description?: string; paginated?: boolean } = {},
+  options: {
+    status?: number;
+    description?: string;
+    paginated?: boolean;
+    isArray?: boolean;
+  } = {},
 ) {
-  const { status = HttpStatus.OK, description, paginated = false } = options;
+  const {
+    status = HttpStatus.OK,
+    description,
+    paginated = false,
+    isArray = false,
+  } = options;
 
-  // A single item, or a list of them for paginated responses
-  const data = paginated
-    ? { type: 'array', items: { $ref: getSchemaPath(model) } }
-    : { $ref: getSchemaPath(model) };
+  // A single item, or a list of them
+  const data =
+    paginated || isArray
+      ? { type: 'array', items: { $ref: getSchemaPath(model) } }
+      : { $ref: getSchemaPath(model) };
 
   return applyDecorators(
     // Registers the models so the $refs above resolve in the docs

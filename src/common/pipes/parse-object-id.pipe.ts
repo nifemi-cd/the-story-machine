@@ -1,4 +1,8 @@
-import { Injectable, type PipeTransform } from '@nestjs/common';
+import {
+  Injectable,
+  type ArgumentMetadata,
+  type PipeTransform,
+} from '@nestjs/common';
 import { Types } from 'mongoose';
 import { AppException } from '../exceptions/app.exception.js';
 
@@ -13,6 +17,8 @@ const OBJECT_ID_PATTERN = /^[0-9a-f]{24}$/i;
  * Without it, a bad id like "/user/123" would reach the database and fail
  * there with a 500.
  *
+ * The error names the route parameter it came from, e.g. "storyId".
+ *
  * @example
  * findOne(@Param('id', ParseObjectIdPipe) id: Types.ObjectId)
  */
@@ -21,12 +27,13 @@ export class ParseObjectIdPipe implements PipeTransform<
   string,
   Types.ObjectId
 > {
-  transform(value: string): Types.ObjectId {
+  transform(value: string, metadata?: ArgumentMetadata): Types.ObjectId {
     if (!OBJECT_ID_PATTERN.test(value)) {
-      throw AppException.badRequest('Invalid id', [
+      const field = metadata?.data ?? 'id';
+      throw AppException.badRequest(`Invalid ${field}`, [
         {
-          field: 'id',
-          message: 'id must be a 24-character hex string',
+          field,
+          message: `${field} must be a 24-character hex string`,
           success: false,
         },
       ]);
