@@ -7,7 +7,7 @@ import {
   Param,
   Query,
 } from '@nestjs/common';
-import { ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Types } from 'mongoose';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto.js';
 import { UserService } from './user.service.js';
@@ -20,15 +20,7 @@ import {
   ApiEnvelope,
   ApiError,
 } from '../common/swagger/api-response.decorators.js';
-
-// Documents the :id route parameter; without it Swagger would describe it as an ObjectId class
-const ApiUserIdParam = () =>
-  ApiParam({
-    name: 'id',
-    type: String,
-    description: 'User id (24-character hex)',
-    example: '6ad4306d3168a59d2918aead',
-  });
+import { ApiObjectIdParam } from '../common/swagger/api-param.decorators.js';
 
 /**
  * User routes under /api/v1/user. Request bodies are validated against
@@ -74,7 +66,7 @@ export class UserController {
   @Get(':id')
   @ResponseMessage('User fetched')
   @ApiOperation({ summary: 'Get a user by id' })
-  @ApiUserIdParam()
+  @ApiObjectIdParam('User')
   @ApiEnvelope(UserResponseDto, { description: 'User fetched' })
   @ApiError(400, 'The id is not a valid 24-character hex string')
   @ApiError(404, 'User not found')
@@ -90,7 +82,7 @@ export class UserController {
     description:
       'Send only the fields to change. Email and password cannot be changed here.',
   })
-  @ApiUserIdParam()
+  @ApiObjectIdParam('User')
   @ApiEnvelope(UserResponseDto, { description: 'User updated' })
   @ApiError(
     400,

@@ -7,7 +7,7 @@ import {
   Param,
   Query,
 } from '@nestjs/common';
-import { ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Types } from 'mongoose';
 import { StoryService } from './story.service.js';
 import { CreateStoryDto } from './dto/create-story.dto.js';
@@ -20,15 +20,7 @@ import {
   ApiEnvelope,
   ApiError,
 } from '../common/swagger/api-response.decorators.js';
-
-// Documents the :id route parameter; without it Swagger would describe it as an ObjectId class
-const ApiStoryIdParam = () =>
-  ApiParam({
-    name: 'id',
-    type: String,
-    description: 'Story id (24-character hex)',
-    example: '6ad4306d3168a59d2918aeb0',
-  });
+import { ApiObjectIdParam } from '../common/swagger/api-param.decorators.js';
 
 /**
  * Story routes under /api/v1/story. Request bodies are validated against
@@ -78,7 +70,7 @@ export class StoryController {
   @Get(':id')
   @ResponseMessage('Story fetched')
   @ApiOperation({ summary: 'Get a story by id' })
-  @ApiStoryIdParam()
+  @ApiObjectIdParam('Story')
   @ApiEnvelope(StoryResponseDto, { description: 'Story fetched' })
   @ApiError(400, 'The id is not a valid 24-character hex string')
   @ApiError(404, 'Story not found')
@@ -94,7 +86,7 @@ export class StoryController {
     description:
       'Send only the fields to change. Setting status publishes or unpublishes the story.',
   })
-  @ApiStoryIdParam()
+  @ApiObjectIdParam('Story')
   @ApiEnvelope(StoryResponseDto, { description: 'Story updated' })
   @ApiError(400, 'Invalid id, or a field failed validation')
   @ApiError(404, 'Story not found')
