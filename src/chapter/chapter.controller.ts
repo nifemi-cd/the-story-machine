@@ -1,5 +1,5 @@
 import { Controller, Get, Post, Body, Patch, Param } from '@nestjs/common';
-import { ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Types } from 'mongoose';
 import { ChapterService } from './chapter.service.js';
 import { CreateChapterDto } from './dto/create-chapter.dto.js';
@@ -11,23 +11,7 @@ import {
   ApiEnvelope,
   ApiError,
 } from '../common/swagger/api-response.decorators.js';
-
-// Documents the route parameters; without them Swagger would describe them as ObjectId classes
-const ApiStoryIdParam = () =>
-  ApiParam({
-    name: 'storyId',
-    type: String,
-    description: 'Story id (24-character hex)',
-    example: '6ad4306d3168a59d2918aeb0',
-  });
-
-const ApiChapterIdParam = () =>
-  ApiParam({
-    name: 'id',
-    type: String,
-    description: 'Chapter id (24-character hex)',
-    example: '6ad4306d3168a59d2918aeb1',
-  });
+import { ApiObjectIdParam } from '../common/swagger/api-param.decorators.js';
 
 /**
  * Chapter routes under /api/v1/story/:storyId/chapter, so every chapter is
@@ -38,7 +22,7 @@ const ApiChapterIdParam = () =>
  * The @Api* decorators only describe the routes for the docs at /api/docs.
  */
 @ApiTags('Chapters')
-@ApiStoryIdParam()
+@ApiObjectIdParam('Story', 'storyId')
 @Controller({ path: 'story/:storyId/chapter', version: '1' })
 export class ChapterController {
   constructor(private readonly chapterService: ChapterService) {}
@@ -85,7 +69,7 @@ export class ChapterController {
   @Get(':id')
   @ResponseMessage('Chapter fetched')
   @ApiOperation({ summary: 'Get a chapter by id' })
-  @ApiChapterIdParam()
+  @ApiObjectIdParam('Chapter')
   @ApiEnvelope(ChapterResponseDto, { description: 'Chapter fetched' })
   @ApiError(400, 'Invalid storyId or id')
   @ApiError(404, 'Chapter not found in this story')
@@ -103,7 +87,7 @@ export class ChapterController {
     summary: 'Update a chapter',
     description: 'Send only the fields to change.',
   })
-  @ApiChapterIdParam()
+  @ApiObjectIdParam('Chapter')
   @ApiEnvelope(ChapterResponseDto, { description: 'Chapter updated' })
   @ApiError(400, 'Invalid storyId or id, or a field failed validation')
   @ApiError(404, 'Chapter not found in this story')

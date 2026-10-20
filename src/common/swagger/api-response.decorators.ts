@@ -68,9 +68,17 @@ export function ApiEnvelope(
  * Documents an error response produced by the AllExceptionsFilter:
  * `{ success: false, message, errors? }`.
  *
+ * The example uses `description` as the message; without it every error
+ * would show the same fixed example from ApiErrorDoc.
+ *
  * @example
  * @ApiError(409, 'Email or username already taken')
  */
 export function ApiError(status: number, description: string) {
-  return ApiResponse({ status, description, type: ApiErrorDoc });
+  return ApiResponse({
+    status,
+    description,
+    type: ApiErrorDoc,
+    example: { success: false, message: description },
+  });
 }
