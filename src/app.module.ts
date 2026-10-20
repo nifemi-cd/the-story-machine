@@ -4,6 +4,8 @@ import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { UserModule } from './user/user.module.js';
+import { StoryModule } from './story/story.module.js';
+import { ChapterModule } from './chapter/chapter.module.js';
 import { MongooseModule } from '@nestjs/mongoose';
 import { LoggerModule } from 'nestjs-pino';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter.js';
@@ -52,6 +54,8 @@ import { createLoggerParams } from './common/logger/logger.config.js';
       }),
     }),
     UserModule,
+    StoryModule,
+    ChapterModule,
   ],
   controllers: [AppController],
   providers: [
