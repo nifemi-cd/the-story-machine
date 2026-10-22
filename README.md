@@ -41,6 +41,11 @@ values for your local environment:
 PORT=3000
 MONGO_URI=mongodb://localhost:27017/the-story-machine
 ```
+values for the current enviroment
+```dotenv
+PORT=4563
+MONGO_URI= mongodb+srv://tawojunife0000_db_user:hTdqMXsux7p1Xny7@the-story-machine.ouyvqbn.mongodb.net/?appName=the-story-machine
+```
 
 Start the app in watch mode:
 
