@@ -25,23 +25,44 @@ export class ChapterRef {
 export const ChapterRefSchema = SchemaFactory.createForClass(ChapterRef);
 
 /**
- * How the story looks to readers. Empty values mean "use the reader's
- * default theme".
+ * One of a character's emotions. Dialogue lines pick one by name as their
+ * `portrait`. Field names follow the story JSON contract (snake_case).
  */
 @Schema({ _id: false })
-export class Presentation {
-  @Prop({ trim: true, default: '' })
-  font: string;
+export class Emotion {
+  @Prop({ required: true, trim: true })
+  emotion: string;
 
-  // Hex colours, e.g. "#1a1a1a"
-  @Prop({ default: '' })
-  textColor: string;
+  // Placeholders: where the portrait sits on screen, set in a later sprint
+  @Prop({ type: Number, default: null })
+  portrait_x: number | null;
 
-  @Prop({ default: '' })
-  windowColor: string;
+  @Prop({ type: Number, default: null })
+  portrait_y: number | null;
 }
 
-export const PresentationSchema = SchemaFactory.createForClass(Presentation);
+export const EmotionSchema = SchemaFactory.createForClass(Emotion);
+
+/**
+ * A character in the story. Dialogue lines refer to it by name.
+ * Stored as a list rather than the contract's name-keyed object because
+ * MongoDB keys can't contain "." (e.g. "Dr. Smith"); the reader endpoint
+ * turns the list into that object.
+ */
+@Schema({ _id: false })
+export class Character {
+  @Prop({ required: true, trim: true })
+  name: string;
+
+  @Prop({ type: String, default: null })
+  description: string | null;
+
+  // Always includes "default", the portrait used when a line doesn't set one
+  @Prop({ type: [EmotionSchema], default: [] })
+  emotions: Emotion[];
+}
+
+export const CharacterSchema = SchemaFactory.createForClass(Character);
 
 /**
  * A story as stored in the "stories" collection. Its chapters live in their
@@ -79,9 +100,9 @@ export class Story {
   @Prop({ type: [ChapterRefSchema], default: [] })
   chapterOrder: ChapterRef[];
 
-  // default fills in each field's own default ('')
-  @Prop({ type: PresentationSchema, default: () => ({}) })
-  presentation: Presentation;
+  // Shared by every chapter, so each chapter's dialogue can use the same cast
+  @Prop({ type: [CharacterSchema], default: [] })
+  characters: Character[];
 
   // Cached counts, so story cards don't have to count records (likes, comments and reads aren't built yet)
   @Prop({ default: 0, min: 0 })

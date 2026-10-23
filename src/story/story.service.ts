@@ -4,10 +4,15 @@ import { Model, Types, type QueryFilter } from 'mongoose';
 import { AppException } from '../common/exceptions/app.exception.js';
 import type { PaginatedResult } from '../common/interfaces/api-response.interface.js';
 import { User } from '../user/entities/user.entity.js';
+import type { CharacterDto } from './dto/character.dto.js';
 import { CreateStoryDto } from './dto/create-story.dto.js';
 import { ListStoriesQueryDto } from './dto/list-stories-query.dto.js';
 import { UpdateStoryDto } from './dto/update-story.dto.js';
-import { Story, type StoryDocument } from './entities/story.entity.js';
+import {
+  Story,
+  type Character,
+  type StoryDocument,
+} from './entities/story.entity.js';
 import { StoryStatus } from './enums/story-status.enum.js';
 
 /**
@@ -30,7 +35,11 @@ export class StoryService {
     // MongoDB doesn't enforce references, so check the author exists ourselves
     await this.authorExist(createStoryDto.authorId);
 
-    return await this.storyModel.create(createStoryDto);
+    const { characters, ...fields } = createStoryDto;
+    return await this.storyModel.create({
+      ...fields,
+      ...(characters && { characters: toCharacters(characters) }),
+    });
   }
 
   /**
@@ -75,9 +84,27 @@ export class StoryService {
   }
 
   /**
+   * Returns a story together with its author's username, for the reader
+   * payload, which shows the author by name.
+   *
+   * @throws AppException 404 if no story has this id
+   */
+  async findWithAuthorName(
+    id: Types.ObjectId,
+  ): Promise<{ story: StoryDocument; author: string }> {
+    const story = await this.findStoryById(id);
+    const user = await this.userModel
+      .findById(story.authorId)
+      .select('username')
+      .exec();
+    // Users can't be deleted yet, so a missing author shouldn't happen
+    return { story, author: user?.username ?? '' };
+  }
+
+  /**
    * Updates only the fields sent (PATCH) and returns the updated story.
    * Changing the status also sets publishedAt: now when published, null
-   * when moved back to draft.
+   * when moved back to draft. Characters, when sent, replace the whole list.
    *
    * @throws AppException 404 if no story has this id
    */
@@ -85,15 +112,9 @@ export class StoryService {
     id: Types.ObjectId,
     updateStoryDto: UpdateStoryDto,
   ): Promise<StoryDocument> {
-    const { presentation, status, ...fields } = updateStoryDto;
+    const { characters, status, ...fields } = updateStoryDto;
     const changes: Record<string, unknown> = withoutUndefined(fields);
-
-    // Dotted paths change only the presentation fields sent, not the whole object
-    for (const [key, value] of Object.entries(
-      withoutUndefined({ ...presentation }),
-    )) {
-      changes[`presentation.${key}`] = value;
-    }
+    if (characters) changes.characters = toCharacters(characters);
 
     // Only touch publishedAt when the status actually changes
     if (status) {
@@ -211,6 +232,27 @@ export class StoryService {
       ]);
     }
   }
+}
+
+/**
+ * Turns the characters from a request into what's stored: unsent optional
+ * fields become null, and every character gets a "default" emotion (first)
+ * for dialogue lines that don't pick a portrait.
+ */
+function toCharacters(characters: CharacterDto[]): Character[] {
+  return characters.map(({ name, description, emotions = [] }) => {
+    const names = emotions.map((e) => e.emotion);
+    if (!names.includes('default')) names.unshift('default');
+    return {
+      name,
+      description: description ?? null,
+      emotions: names.map((emotion) => ({
+        emotion,
+        portrait_x: null,
+        portrait_y: null,
+      })),
+    };
+  });
 }
 
 /** Drops keys whose value is undefined, so a PATCH only sets what was sent. */

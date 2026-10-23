@@ -31,7 +31,7 @@ describe('StoryService', () => {
     exists: vi.fn(),
     updateOne: vi.fn(),
   };
-  const userModel = { exists: vi.fn() };
+  const userModel = { exists: vi.fn(), findById: vi.fn() };
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -60,6 +60,33 @@ describe('StoryService', () => {
 
       expect(userModel.exists).toHaveBeenCalledWith({ _id: authorId });
       expect(storyModel.create).toHaveBeenCalledWith(dto);
+    });
+
+    it('keeps a sent default emotion where it is instead of adding another', async () => {
+      await service.create({
+        ...dto,
+        characters: [
+          {
+            name: 'Cindy',
+            description: 'A light sleeper',
+            emotions: [{ emotion: 'worried' }, { emotion: 'default' }],
+          },
+        ],
+      });
+
+      expect(storyModel.create).toHaveBeenCalledWith({
+        ...dto,
+        characters: [
+          {
+            name: 'Cindy',
+            description: 'A light sleeper',
+            emotions: [
+              { emotion: 'worried', portrait_x: null, portrait_y: null },
+              { emotion: 'default', portrait_x: null, portrait_y: null },
+            ],
+          },
+        ],
+      });
     });
 
     it('rejects an unknown author with a 400 on authorId', async () => {
@@ -134,6 +161,35 @@ describe('StoryService', () => {
     });
   });
 
+  describe('findWithAuthorName', () => {
+    const id = new Types.ObjectId();
+
+    it("returns the story with its author's username", async () => {
+      const story = { _id: id, authorId };
+      storyModel.findById.mockReturnValue(execResolving(story));
+      const select = vi.fn(() => execResolving({ username: 'mock-author' }));
+      userModel.findById.mockReturnValue({ select });
+
+      await expect(service.findWithAuthorName(id)).resolves.toEqual({
+        story,
+        author: 'mock-author',
+      });
+      expect(userModel.findById).toHaveBeenCalledWith(authorId);
+      expect(select).toHaveBeenCalledWith('username');
+    });
+
+    it('throws a 404 when the story does not exist', async () => {
+      storyModel.findById.mockReturnValue(execResolving(null));
+
+      const error = await service
+        .findWithAuthorName(id)
+        .catch((e: unknown) => e);
+
+      expect((error as AppException).getStatus()).toBe(404);
+      expect(userModel.findById).not.toHaveBeenCalled();
+    });
+  });
+
   describe('update', () => {
     const id = new Types.ObjectId();
     const updated = { _id: id, title: 'New' };
@@ -160,12 +216,23 @@ describe('StoryService', () => {
       expect(storyModel.findById).not.toHaveBeenCalled();
     });
 
-    it('changes only the presentation fields sent', async () => {
+    it('replaces the characters, adding the default emotion', async () => {
       await service.update(id, {
-        presentation: { font: 'Georgia', textColor: undefined },
+        characters: [{ name: 'Dave', emotions: [{ emotion: 'angry' }] }],
       });
 
-      expect(sentChanges()).toEqual({ 'presentation.font': 'Georgia' });
+      expect(sentChanges()).toEqual({
+        characters: [
+          {
+            name: 'Dave',
+            description: null,
+            emotions: [
+              { emotion: 'default', portrait_x: null, portrait_y: null },
+              { emotion: 'angry', portrait_x: null, portrait_y: null },
+            ],
+          },
+        ],
+      });
     });
 
     it('sets publishedAt when a draft is published', async () => {

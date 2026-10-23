@@ -10,16 +10,41 @@ export class ChapterRefResponseDto {
   title: string;
 }
 
-/** A story's look, for the Swagger docs. Empty means the reader's default. */
-export class PresentationResponseDto {
-  @ApiProperty({ example: 'Georgia' })
-  font: string;
+/** One of a character's emotions, for the Swagger docs. */
+export class EmotionResponseDto {
+  @ApiProperty({ example: 'default' })
+  emotion: string;
 
-  @ApiProperty({ example: '#1a1a1a' })
-  textColor: string;
+  @ApiProperty({
+    description: 'Not used yet',
+    type: Number,
+    nullable: true,
+    example: null,
+  })
+  portrait_x: number | null;
 
-  @ApiProperty({ example: '#fdf6e3' })
-  windowColor: string;
+  @ApiProperty({
+    description: 'Not used yet',
+    type: Number,
+    nullable: true,
+    example: null,
+  })
+  portrait_y: number | null;
+}
+
+/** A character in the story, for the Swagger docs. */
+export class CharacterResponseDto {
+  @ApiProperty({ example: 'Dave' })
+  name: string;
+
+  @ApiProperty({ type: String, nullable: true, example: null })
+  description: string | null;
+
+  @ApiProperty({
+    description: 'Always includes "default"',
+    type: [EmotionResponseDto],
+  })
+  emotions: EmotionResponseDto[];
 }
 
 /** A story as the API returns it, for the Swagger docs. */
@@ -70,8 +95,8 @@ export class StoryResponseDto {
   })
   chapterOrder: ChapterRefResponseDto[];
 
-  @ApiProperty({ type: PresentationResponseDto })
-  presentation: PresentationResponseDto;
+  @ApiProperty({ type: [CharacterResponseDto] })
+  characters: CharacterResponseDto[];
 
   @ApiProperty({ example: 0 })
   likeCount: number;

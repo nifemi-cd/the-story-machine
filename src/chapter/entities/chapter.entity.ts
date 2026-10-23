@@ -5,6 +5,7 @@ import {
   type Types,
 } from 'mongoose';
 import { Story } from '../../story/entities/story.entity.js';
+import { Script, ScriptSchema } from './script.entity.js';
 
 /**
  * One chapter of a story, as stored in the "chapters" collection.
@@ -28,10 +29,10 @@ export class Chapter {
   @Prop({ required: true, min: 0 })
   order: number;
 
-  // Placeholder: the JSON the story-script parser produces for the reader.
-  // Mixed accepts any shape until the parser's output format is settled.
-  @Prop({ type: MongooseSchema.Types.Mixed, default: null })
-  contents: Record<string, unknown> | null;
+  // The parsed script the reader plays; null until one is saved through
+  // PUT /story/:storyId/chapter/:id/script
+  @Prop({ type: ScriptSchema, default: null })
+  script: Script | null;
 
   // Filled in by Mongoose because of timestamps: true
   createdAt: Date;
