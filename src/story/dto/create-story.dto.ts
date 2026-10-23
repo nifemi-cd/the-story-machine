@@ -13,16 +13,13 @@ import {
 } from 'class-validator';
 import { CharacterDto } from './character.dto.js';
 
-// Trim before validation so "  " counts as empty
+// trim first so a title that's only spaces fails IsNotEmpty
 const trim = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() : value;
 
-/**
- * Body of POST /api/v1/story. New stories always start as drafts with no
- * chapters; chapters are added through /story/:storyId/chapter.
- */
+// new stories always start as an empty draft, chapters get added separately
 export class CreateStoryDto {
-  // Temporary: once login exists the author will be the logged-in user
+  // TODO take this from the logged in user once auth is done
   @ApiProperty({
     description:
       'Id of the user writing the story. Will come from the login session once auth exists.',
@@ -60,7 +57,7 @@ export class CreateStoryDto {
   @ArrayUnique((character: CharacterDto) => character.name, {
     message: 'characters must have unique names',
   })
-  // Turns each plain object into a CharacterDto so its own rules run
+  // without @Type the nested characters are plain objects and their rules never run
   @ValidateNested({ each: true })
   @Type(() => CharacterDto)
   characters?: CharacterDto[];

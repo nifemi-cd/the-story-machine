@@ -13,18 +13,12 @@ import { ResponseInterceptor } from './common/interceptors/response.interceptor.
 import { createValidationPipe } from './common/pipes/validation.pipe.js';
 import { createLoggerParams } from './common/logger/logger.config.js';
 
-/**
- * Root module: loads config from .env, sets up logging and the MongoDB
- * connection, and registers the app-wide validation, response format
- * and error handling.
- */
 @Module({
   imports: [
-    // Reads .env into ConfigService, available in every module
+    // isGlobal so every module can use ConfigService without importing it
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-    // Readable logs locally, JSON in production; level set by LOG_LEVEL
     LoggerModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) =>
@@ -33,7 +27,6 @@ import { createLoggerParams } from './common/logger/logger.config.js';
           level: configService.get<string>('LOG_LEVEL') ?? 'info',
         }),
     }),
-    // Connects to MONGO_URI and logs connection changes
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -60,13 +53,10 @@ import { createLoggerParams } from './common/logger/logger.config.js';
   controllers: [AppController],
   providers: [
     AppService,
-    // Registered here rather than in main.ts so tests built from AppModule
-    // get the same validation and response format
-    // Validates request bodies and query strings against their DTOs
+    // registering these here instead of main.ts means the e2e tests get them
+    // too, since the tests build the app from AppModule
     { provide: APP_PIPE, useFactory: createValidationPipe },
-    // Wraps successful responses in { success, message, data }
     { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },
-    // Turns every error into { success: false, message, errors? }
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
   ],
 })

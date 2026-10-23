@@ -2,13 +2,9 @@ import { ValidationPipe, type ValidationError } from '@nestjs/common';
 import { AppException } from '../exceptions/app.exception.js';
 import type { FieldError } from '../interfaces/api-response.interface.js';
 
-/**
- * Converts class-validator errors into one FieldError per failed rule.
- * Nested fields get dotted paths, e.g. "profile.url".
- *
- * @param errors errors from class-validator
- * @param parentPath path of the parent field, used when recursing into nested objects
- */
+// returns a flat list of field errors
+// class-validator gives back a nested tree of errors, this flattens it into
+// one error per broken rule with paths like profile.url for nested fields
 export function toFieldErrors(
   errors: ValidationError[],
   parentPath = '',
@@ -17,7 +13,7 @@ export function toFieldErrors(
     const field = parentPath
       ? `${parentPath}.${error.property}`
       : error.property;
-    // A field can fail several rules at once (e.g. too short and wrong format)
+    // one field can break more than one rule
     const own: FieldError[] = Object.values(error.constraints ?? {}).map(
       (message) => ({
         field,
@@ -29,20 +25,14 @@ export function toFieldErrors(
   });
 }
 
-/**
- * The app-wide ValidationPipe. It checks request bodies and query strings
- * against their DTO classes before the controller runs.
- *
- * - whitelist + forbidNonWhitelisted: fields not in the DTO are rejected,
- *   so clients can't set things like `roles` or `passwordHash`.
- * - transform: the controller receives a DTO instance with converted types
- *   (e.g. "?page=2" becomes the number 2).
- * - Failures become a 400 listing every invalid field.
- */
+// returns the validation pipe used for the whole app
 export function createValidationPipe() {
   return new ValidationPipe({
+    // reject any field that isn't in the DTO, so nobody can sneak in
+    // something like roles or passwordHash
     whitelist: true,
     forbidNonWhitelisted: true,
+    // turns query strings into real types, so ?page=2 becomes the number 2
     transform: true,
     exceptionFactory: (errors) =>
       AppException.validation(toFieldErrors(errors)),

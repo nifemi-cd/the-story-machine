@@ -3,11 +3,7 @@ import { IsEnum, IsMongoId, IsOptional } from 'class-validator';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto.js';
 import { StoryStatus } from '../enums/story-status.enum.js';
 
-/**
- * Query parameters for GET /api/v1/story, e.g.
- * `?status=published&page=2` for the reader feed or `?authorId=...` for
- * one author's stories.
- */
+// ?status=published for the reader feed, ?authorId=... for one author's stories
 export class ListStoriesQueryDto extends PaginationQueryDto {
   @ApiPropertyOptional({
     description: "Only this user's stories",

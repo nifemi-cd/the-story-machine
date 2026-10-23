@@ -2,13 +2,9 @@ import { Injectable, type OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { BlobServiceClient, type ContainerClient } from '@azure/storage-blob';
 
-/**
- * Saves, reads and deletes files in Azure Blob Storage. The rest of the app
- * goes through this service rather than using the Azure SDK directly.
- *
- * Uses the container named by AZURE_STORAGE_CONTAINER ("stories" by default),
- * so tests can point at a separate container.
- */
+// Keeps all the azure code in one place so the rest of the app doesn't
+// touch the SDK. The container name comes from env so testing can use a
+// separate container from the real one.
 @Injectable()
 export class StorageService implements OnModuleInit {
   private readonly container: ContainerClient;
@@ -22,17 +18,13 @@ export class StorageService implements OnModuleInit {
     );
   }
 
-  /** Called by Nest on startup; creates the container if it's missing. */
+  // runs on startup, makes the container if it doesn't exist yet
   async onModuleInit() {
     await this.container.createIfNotExists();
   }
 
-  /**
-   * Uploads a file, replacing any file already stored under that name.
-   *
-   * @param name path inside the container, e.g. "drafts/<storyId>.txt"
-   * @returns the file's URL
-   */
+  // uploads a file and returns its url
+  // uploading to a name that already exists just replaces the old file
   async upload(
     name: string,
     content: Buffer,
@@ -45,17 +37,15 @@ export class StorageService implements OnModuleInit {
     return blob.url;
   }
 
-  /**
-   * Returns a file's contents. Loads the whole file into memory, which is
-   * fine for small text files.
-   *
-   * @throws RestError 404 if no file has this name
-   */
+  // returns the file contents
+  // loads the whole file into memory, fine for small text files but
+  // would need streaming if we ever allow big uploads
   async download(name: string): Promise<Buffer> {
     return await this.container.getBlockBlobClient(name).downloadToBuffer();
   }
 
-  /** Deletes a file; does nothing if it's already gone. */
+  // deletes a file, returns nothing
+  // ignore errors so deleting a file that's already gone doesn't fail
   async delete(name: string): Promise<void> {
     await this.container.deleteBlob(name).catch(() => undefined);
   }

@@ -10,7 +10,7 @@ import { ScriptDto } from './dto/script.dto.js';
 import { checkScript, toStoredScript } from './check-script.js';
 import { Chapter, type ChapterDocument } from './entities/chapter.entity.js';
 
-/** A chapter in the story JSON contract shape, as every chapter route returns it. */
+// what the chapter routes send back, matching the story JSON contract
 export interface ChapterView {
   title: string;
   author: string;
@@ -21,19 +21,11 @@ export interface ChapterView {
   story: unknown;
 }
 
-/** A chapter in a story's chapter list: the contract shape without the script or cast. */
 export type ChapterSummary = Omit<ChapterView, 'characters' | 'story'>;
 
-/**
- * Business logic for a story's chapters: adding, listing, lookup, updates,
- * deleting and saving scripts. Every lookup is scoped to the story in the
- * URL, so a chapter id from another story is a 404.
- *
- * Chapters are returned in the story JSON contract shape, with the parent
- * story's title, author and characters around the chapter. In the database
- * the chapter's name is `title` and its story is `script`; only the API
- * uses the contract's names.
- */
+// In the database a chapter's name is "title" and its script is "script".
+// The API uses the contract names (chapter_name and story) instead, so the
+// toView/toSummary helpers at the bottom do the renaming.
 @Injectable()
 export class ChapterService {
   constructor(
@@ -41,26 +33,17 @@ export class ChapterService {
     private readonly storyService: StoryService,
   ) {}
 
-  /**
-   * Adds a chapter to the end of the story, with its script if one is sent.
-   *
-   * The story's chapterOrder is updated first (that's where the position
-   * comes from), then the chapter is saved. If saving fails, the entry is
-   * taken back out so the story never lists a chapter that doesn't exist.
-   *
-   * @throws AppException 400 listing every problem if the script is invalid
-   * @throws AppException 404 if the story doesn't exist
-   */
+  // adds a chapter to the end of the story and returns it
   async create(
     storyId: Types.ObjectId,
     { chapter_name, story: script }: CreateChapterDto,
   ): Promise<ChapterView> {
     const { story, author } =
       await this.storyService.findWithAuthorName(storyId);
-    // The script sits under `story` in this body, so its error paths do too
+    // the script is under "story" in the body so errors should say story.lines... etc
     if (script) this.assertValidScript(script, story, 'story.');
 
-    // Chosen up front so the story can list the chapter before it's saved
+    // make the id ourselves so we can add it to chapterOrder before saving
     const _id = new Types.ObjectId();
     const order = await this.storyService.addChapter(
       storyId,
@@ -78,21 +61,18 @@ export class ChapterService {
       });
       return toView(chapter, story, author);
     } catch (error) {
+      // undo the chapterOrder entry so the story doesn't point at a chapter that was never saved
       await this.storyService.removeChapter(storyId, _id);
       throw error;
     }
   }
 
-  /**
-   * Returns all of the story's chapters in reading order, without their
-   * scripts or the story's characters (load a single chapter for those).
-   *
-   * @throws AppException 404 if the story doesn't exist
-   */
+  // returns the story's chapters in reading order, without scripts
   async findAll(storyId: Types.ObjectId): Promise<ChapterSummary[]> {
     const { story, author } =
       await this.storyService.findWithAuthorName(storyId);
 
+    // leave out the scripts since they can be big and the list doesn't need them
     const chapters = await this.chapterModel
       .find({ storyId })
       .select('-script')
@@ -101,12 +81,7 @@ export class ChapterService {
     return chapters.map((chapter) => toSummary(chapter, story, author));
   }
 
-  /**
-   * Returns a single chapter of the story with its script: everything the
-   * reader needs to play it.
-   *
-   * @throws AppException 404 if the story, or its chapter with this id, doesn't exist
-   */
+  // returns one chapter with its script, ready for the reader
   async findOne(
     storyId: Types.ObjectId,
     id: Types.ObjectId,
@@ -118,12 +93,7 @@ export class ChapterService {
     return toView(chapter, story, author);
   }
 
-  /**
-   * Updates only the fields sent (PATCH) and returns the updated chapter.
-   * A new chapter_name is copied into the story's chapterOrder too.
-   *
-   * @throws AppException 404 if the story, or its chapter with this id, doesn't exist
-   */
+  // updates the chapter name and returns the updated chapter
   async update(
     storyId: Types.ObjectId,
     id: Types.ObjectId,
@@ -135,33 +105,22 @@ export class ChapterService {
     const chapter = await this.chapterModel
       .findOneAndUpdate(
         { _id: id, storyId },
-        // Stored as `title`; an empty change when chapter_name isn't sent
         chapter_name === undefined ? {} : { title: chapter_name },
-        {
-          // Return the chapter after the change, not before
-          returnDocument: 'after',
-          // Apply schema rules (e.g. title max length) to updates too
-          runValidators: true,
-        },
+        { returnDocument: 'after', runValidators: true },
       )
       .exec();
     if (!chapter) {
       throw AppException.notfound('Chapter not found');
     }
 
+    // the story keeps a copy of each chapter title, so update that too
     if (chapter_name) {
       await this.storyService.renameChapter(storyId, id, chapter.title);
     }
     return toView(chapter, story, author);
   }
 
-  /**
-   * Deletes the chapter for good and takes it out of the story's
-   * chapterOrder. Later chapters move up one place, so each chapter's order
-   * still matches its position in chapterOrder.
-   *
-   * @throws AppException 404 if the story has no chapter with this id
-   */
+  // deletes the chapter and fixes the order of the ones after it
   async remove(storyId: Types.ObjectId, id: Types.ObjectId): Promise<void> {
     const chapter = await this.chapterModel
       .findOneAndDelete({ _id: id, storyId })
@@ -171,6 +130,7 @@ export class ChapterService {
     }
 
     await this.storyService.removeChapter(storyId, id);
+    // shift the later chapters down by one so order still matches chapterOrder
     await this.chapterModel
       .updateMany(
         { storyId, order: { $gt: chapter.order } },
@@ -179,19 +139,13 @@ export class ChapterService {
       .exec();
   }
 
-  /**
-   * Replaces the chapter's script with one parsed by the frontend, after
-   * checking it against the story (see check-script.ts).
-   *
-   * @throws AppException 400 listing every problem if the script is invalid
-   * @throws AppException 404 if the story, or its chapter with this id, doesn't exist
-   */
+  // checks the script against the story, saves it and returns the updated chapter
   async saveScript(
     storyId: Types.ObjectId,
     id: Types.ObjectId,
     scriptDto: ScriptDto,
   ): Promise<ChapterView> {
-    // Dialogue is checked against the story's characters
+    // need the story here to check dialogue against its characters
     const { story, author } =
       await this.storyService.findWithAuthorName(storyId);
     this.assertValidScript(scriptDto, story);
@@ -209,12 +163,8 @@ export class ChapterService {
     return toView(chapter, story, author);
   }
 
-  /**
-   * Loads a chapter of the story or fails with a 404, so callers don't have
-   * to check for null.
-   *
-   * @throws AppException 404 if the story has no chapter with this id
-   */
+  // returns the chapter or throws a 404
+  // filtering by storyId too means you can't load a chapter through some other story's url
   private async findChapter(
     storyId: Types.ObjectId,
     id: Types.ObjectId,
@@ -228,12 +178,7 @@ export class ChapterService {
     return chapter;
   }
 
-  /**
-   * Fails unless the script passes the checks in check-script.ts.
-   *
-   * @param prefix put before each error's field, for scripts nested in a body
-   * @throws AppException 400 listing every problem
-   */
+  // throws a 400 listing every problem if the script is invalid
   private assertValidScript(
     script: ScriptDto,
     story: StoryDocument,
@@ -249,7 +194,7 @@ export class ChapterService {
   }
 }
 
-/** The contract fields every chapter response has, whether listed or loaded alone. */
+// returns the basic chapter fields used in the chapter list
 function toSummary(
   chapter: ChapterDocument,
   story: StoryDocument,
@@ -264,24 +209,21 @@ function toSummary(
   };
 }
 
-/**
- * The full contract shape: the summary plus the story's characters and the
- * chapter's script. A chapter without a script yet gets an empty one,
- * which the reader shows as the ending screen.
- */
+// returns the full chapter including the characters and script
 function toView(
   chapter: ChapterDocument,
   story: StoryDocument,
   author: string,
 ): ChapterView {
-  // toJSON turns the flags Map into a plain object
+  // toJSON turns the flags Map into a normal object
   const { script } = chapter.toJSON();
   return {
     ...toSummary(chapter, story, author),
-    // The contract keys characters by name
+    // we store characters as a list but the contract wants them keyed by name
     characters: Object.fromEntries(
       story.toJSON().characters.map((c) => [c.name, c]),
     ),
+    // no script yet means an empty one, which the reader shows as the end screen
     story: script ?? { flags: {}, variables: [], lines: [] },
   };
 }

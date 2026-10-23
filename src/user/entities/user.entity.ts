@@ -2,34 +2,29 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import type { HydratedDocument } from 'mongoose';
 import { UserRole } from '../enums/user-role.enum.js';
 
-/**
- * A user account as stored in the "users" collection. The same account
- * can read and write stories; `roles` only controls admin powers.
- * `timestamps: true` makes Mongoose fill in createdAt and updatedAt.
- */
+// one account can both read and write stories, roles is only for admin stuff
 @Schema({ timestamps: true })
 export class User {
-  // Stored lowercased, so "Ada@Example.com" and "ada@example.com" are the same account
+  // lowercased so Ada@Example.com and ada@example.com count as the same email
   @Prop({ required: true, unique: true, lowercase: true, trim: true })
   email: string;
 
-  // Uniqueness is case-insensitive via the collation index below
+  // the unique check is done by the index at the bottom so it can ignore case
   @Prop({ required: true, trim: true })
   username: string;
 
-  // Never returned by default; use .select('+passwordHash') when verifying logins
+  // select false keeps it out of normal queries, login will need .select('+passwordHash')
   @Prop({ required: true, select: false })
   passwordHash: string;
 
-  // Bump to invalidate all sessions
+  // increasing this will log the user out everywhere once we have auth
   @Prop({ default: 0 })
   tokenVersion: number;
 
-  // Name shown on profiles; defaults to the username at sign-up
   @Prop({ trim: true })
   displayName: string;
 
-  // Never set from requests; admins are promoted outside the public API
+  // never set from a request, admins get added manually
   @Prop({ type: [String], enum: UserRole, default: [UserRole.User] })
   roles: UserRole[];
 
@@ -39,33 +34,33 @@ export class User {
   @Prop({ default: '' })
   profileUrl: string;
 
-  // Cached counts, so profiles don't have to count follow records (follows aren't built yet)
+  // kept as numbers so profiles don't have to count rows every time
+  // (following isn't built yet)
   @Prop({ default: 0, min: 0 })
   followerCount: number;
 
   @Prop({ default: 0, min: 0 })
   followingCount: number;
 
-  // Filled in by Mongoose because of timestamps: true
+  // mongoose sets these because of timestamps true
   createdAt: Date;
   updatedAt: Date;
 }
 
-// A User loaded from the database, with Mongoose methods like .save()
 export type UserDocument = HydratedDocument<User>;
 export const UserSchema = SchemaFactory.createForClass(User);
 
-// Case-insensitive comparison; queries by username must use the same collation
+// strength 2 means compare ignoring case. any query on username has to use
+// this same collation or it won't match the index
 export const USERNAME_COLLATION = { locale: 'en', strength: 2 };
 
-// Unique ignoring case, so "Ada" and "ada" can't both be registered
 UserSchema.index(
   { username: 1 },
   { unique: true, collation: USERNAME_COLLATION },
 );
 
-// select: false doesn't apply to documents returned by create(), so strip the
-// hash and session data whenever a user is serialized into a response
+// select false doesn't apply to what create() returns, so we also strip
+// the hash here to make sure it never ends up in a response
 UserSchema.set('toJSON', {
   versionKey: false,
   transform: (_doc, ret) => {

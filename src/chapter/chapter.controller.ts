@@ -26,21 +26,14 @@ import {
 } from '../common/swagger/api-response.decorators.js';
 import { ApiObjectIdParam } from '../common/swagger/api-param.decorators.js';
 
-/**
- * Chapter routes under /api/v1/story/:storyId/chapter, so every chapter is
- * reached through its story. Request bodies are validated against their DTOs
- * before these methods run, and responses are wrapped in
- * `{ success, message, data }` by the ResponseInterceptor.
- *
- * The @Api* decorators only describe the routes for the docs at /api/docs.
- */
+// chapters are always reached through their story, hence the nested url
 @ApiTags('Chapters')
 @ApiObjectIdParam('Story', 'storyId')
 @Controller({ path: 'story/:storyId/chapter', version: '1' })
 export class ChapterController {
   constructor(private readonly chapterService: ChapterService) {}
 
-  /** POST /api/v1/story/:storyId/chapter: add a chapter to the end of a story. */
+  // adds a chapter to the story and returns it
   @Post()
   @ResponseMessage('Chapter created')
   @ApiOperation({
@@ -64,7 +57,7 @@ export class ChapterController {
     return this.chapterService.create(storyId, createChapterDto);
   }
 
-  /** GET /api/v1/story/:storyId/chapter: list a story's chapters in order. */
+  // returns all of the story's chapters in order
   @Get()
   @ResponseMessage('Chapters fetched')
   @ApiOperation({
@@ -82,7 +75,7 @@ export class ChapterController {
     return this.chapterService.findAll(storyId);
   }
 
-  /** GET /api/v1/story/:storyId/chapter/:id: get one chapter, ready for the reader. */
+  // returns one chapter with its script and characters
   @Get(':id')
   @ResponseMessage('Chapter fetched')
   @ApiOperation({
@@ -101,7 +94,7 @@ export class ChapterController {
     return this.chapterService.findOne(storyId, id);
   }
 
-  /** PATCH /api/v1/story/:storyId/chapter/:id: change a chapter's fields. */
+  // renames a chapter and returns the updated chapter
   @Patch(':id')
   @ResponseMessage('Chapter updated')
   @ApiOperation({
@@ -120,7 +113,7 @@ export class ChapterController {
     return this.chapterService.update(storyId, id, updateChapterDto);
   }
 
-  /** DELETE /api/v1/story/:storyId/chapter/:id: delete a chapter for good. */
+  // deletes a chapter, returns nothing
   @Delete(':id')
   @ResponseMessage('Chapter deleted')
   @ApiOperation({
@@ -139,7 +132,7 @@ export class ChapterController {
     return this.chapterService.remove(storyId, id);
   }
 
-  /** PUT /api/v1/story/:storyId/chapter/:id/script: save a chapter's parsed script. */
+  // saves the chapter's script and returns the updated chapter
   @Put(':id/script')
   @ResponseMessage('Script saved')
   @ApiOperation({

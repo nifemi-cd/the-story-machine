@@ -5,10 +5,9 @@ import type {
   PaginationMeta,
 } from '../interfaces/api-response.interface.js';
 
-// Swagger can't read TypeScript interfaces, so these classes describe the
-// shared response shapes for the docs. They mirror api-response.interface.ts.
+// swagger can't read typescript interfaces, so these classes copy the shapes
+// from api-response.interface.ts just for the docs
 
-/** Pagination details on list responses. */
 export class PaginationMetaDoc implements PaginationMeta {
   @ApiProperty({ example: 1 })
   page: number;
@@ -23,7 +22,6 @@ export class PaginationMetaDoc implements PaginationMeta {
   totalPages: number;
 }
 
-/** One problem with the request. */
 export class FieldErrorDoc implements FieldError {
   @ApiProperty({ example: false })
   success: boolean;
@@ -38,7 +36,6 @@ export class FieldErrorDoc implements FieldError {
   message: string;
 }
 
-/** Body of every error response. */
 export class ApiErrorDoc implements ApiErrorResponse {
   @ApiProperty({ example: false })
   success: boolean;

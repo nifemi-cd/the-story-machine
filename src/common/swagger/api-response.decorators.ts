@@ -2,20 +2,10 @@ import { applyDecorators, HttpStatus, type Type } from '@nestjs/common';
 import { ApiExtraModels, ApiResponse, getSchemaPath } from '@nestjs/swagger';
 import { ApiErrorDoc, PaginationMetaDoc } from './api-response.docs.js';
 
-/**
- * Documents a successful response wrapped by the ResponseInterceptor:
- * `{ success: true, message, data }`, plus `meta` for paginated lists.
- *
- * @param model class describing what goes in `data`, or null when `data` is
- *   always null (e.g. after a delete)
- * @param options.status HTTP status, 200 by default
- * @param options.description shown next to the status, usually the @ResponseMessage
- * @param options.paginated true when `data` is a list with pagination `meta`
- * @param options.isArray true when `data` is a whole list with no `meta`
- *
- * @example
- * @ApiEnvelope(UserResponseDto, { status: 201, description: 'User created' })
- */
+// returns the swagger decorators for a successful response
+// The ResponseInterceptor wraps everything in { success, message, data } but
+// swagger has no idea that happens, so this describes the wrapped version.
+// Pass null as the model when data is always null (like after a delete).
 export function ApiEnvelope(
   model: Type<unknown> | null,
   options: {
@@ -32,7 +22,6 @@ export function ApiEnvelope(
     isArray = false,
   } = options;
 
-  // Nothing, a single item, or a list of them
   const data = !model
     ? { type: 'object', nullable: true, example: null }
     : paginated || isArray
@@ -40,7 +29,7 @@ export function ApiEnvelope(
       : { $ref: getSchemaPath(model) };
 
   return applyDecorators(
-    // Registers the models so the $refs above resolve in the docs
+    // the $refs above don't work unless the models are registered
     ApiExtraModels(...(model ? [model] : []), PaginationMetaDoc),
     ApiResponse({
       status,
@@ -66,16 +55,9 @@ export function ApiEnvelope(
   );
 }
 
-/**
- * Documents an error response produced by the AllExceptionsFilter:
- * `{ success: false, message, errors? }`.
- *
- * The example uses `description` as the message; without it every error
- * would show the same fixed example from ApiErrorDoc.
- *
- * @example
- * @ApiError(409, 'Email or username already taken')
- */
+// returns the swagger decorator for an error response
+// Same idea for errors. The description is reused as the example message,
+// otherwise every error in the docs showed the same "Validation failed" example.
 export function ApiError(status: number, description: string) {
   return ApiResponse({
     status,

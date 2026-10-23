@@ -3,10 +3,7 @@ import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { PaginationQueryDto } from './pagination-query.dto.js';
 
-/**
- * Runs a query string through the DTO the way the ValidationPipe does.
- * Query strings arrive as text, e.g. ?page=2 gives { page: '2' }.
- */
+// query values always come in as strings (?page=2 gives '2') so the tests pass strings too
 async function parse(query: Record<string, string>) {
   const dto = plainToInstance(PaginationQueryDto, query);
   const errors = await validate(dto);

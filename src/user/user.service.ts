@@ -13,13 +13,13 @@ import {
   type UserDocument,
 } from './entities/user.entity.js';
 
-// bcrypt cost factor: higher is slower to hash and harder to brute-force
+// higher = slower to hash, which makes brute forcing passwords harder
 const SALT_ROUNDS = 12;
 
-// MongoDB's duplicate key error code
+// error code mongo gives when a unique index is broken
 const DUPLICATE_KEY = 11000;
 
-/** True when MongoDB rejected a write because a unique index was violated. */
+// returns true if mongo rejected the write because of a unique index
 function isDuplicateKeyError(
   error: unknown,
 ): error is { code: number; keyPattern?: Record<string, unknown> } {
@@ -30,38 +30,30 @@ function isDuplicateKeyError(
   );
 }
 
-/** Business logic for user accounts: sign-up, listing, lookup and profile updates. */
 @Injectable()
 export class UserService {
   constructor(
     @InjectModel(User.name) private readonly userModel: Model<User>,
   ) {}
 
-  /**
-   * Registers a new user. The password is hashed and never stored as plain text.
-   * The display name defaults to the username when not given.
-   *
-   * @throws AppException 409 if the email or username is already taken
-   */
+  // signs up a new user and returns them, the password gets hashed first
   async create(createUserDto: CreateUserDto): Promise<UserDocument> {
-    // email and username arrive trimmed (and email lowercased) from the DTO
+    // the DTO already trimmed these and lowercased the email
     const { password, ...profile } = createUserDto;
 
-    // Check if username or email exist
     await this.userNameOrEmailExist(profile.email, profile.username);
 
-    // Hash password
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
     try {
-      // create user
       return await this.userModel.create({
         ...profile,
         displayName: profile.displayName ?? profile.username,
         passwordHash,
       });
     } catch (error) {
-      // Another request claimed the email or username after our check
+      // two sign ups at the same time can both pass the check above,
+      // so the unique index is the real safety net
       if (isDuplicateKeyError(error)) {
         throw AppException.conflict(
           'Oppsss!! Email or Username has been taken',
@@ -71,19 +63,15 @@ export class UserService {
     }
   }
 
-  /**
-   * Returns one page of users, newest first, plus the total count so
-   * clients can show page numbers.
-   */
+  // returns one page of users, newest first, plus the pagination info
   async findAll({
     page,
     limit,
   }: PaginationQueryDto): Promise<PaginatedResult<UserDocument>> {
-    // Fetch the page and count all users at the same time
     const [items, total] = await Promise.all([
       this.userModel
         .find()
-        // _id breaks ties so pages never overlap or skip users
+        // sorting by _id too so users with the same createdAt don't jump between pages
         .sort({ createdAt: -1, _id: -1 })
         .skip((page - 1) * limit)
         .limit(limit)
@@ -97,27 +85,17 @@ export class UserService {
     };
   }
 
-  /**
-   * Returns a single user by id.
-   *
-   * @throws AppException 404 if no user has this id
-   */
+  // returns one user or throws a 404
   async findOne(id: Types.ObjectId) {
     return await this.findUserById(id);
   }
 
-  /**
-   * Updates only the fields sent (PATCH) and returns the updated user.
-   * Email and password can't be changed here because UpdateUserDto leaves them out.
-   *
-   * @throws AppException 409 if the new username belongs to another user
-   * @throws AppException 404 if no user has this id
-   */
+  // updates the fields that were sent and returns the updated user
+  // email and password aren't in UpdateUserDto so they can't be changed here
   async update(
     id: Types.ObjectId,
     updateUserDto: UpdateUserDto,
   ): Promise<UserDocument> {
-    // Only check the username when it's being changed
     if (updateUserDto.username) {
       await this.userNameExist(updateUserDto.username, id);
     }
@@ -125,9 +103,8 @@ export class UserService {
     try {
       const user = await this.userModel
         .findByIdAndUpdate(id, updateUserDto, {
-          // Return the user after the change, not before
           returnDocument: 'after',
-          // Apply schema rules (e.g. bio max length) to updates too
+          // schema rules like maxlength don't run on updates unless we ask
           runValidators: true,
         })
         .exec();
@@ -136,7 +113,7 @@ export class UserService {
       }
       return user;
     } catch (error) {
-      // Another request took the username after our check
+      // same race as in create
       if (isDuplicateKeyError(error)) {
         throw AppException.conflict('Username has been taken');
       }
@@ -144,11 +121,7 @@ export class UserService {
     }
   }
 
-  /**
-   * Loads a user or fails with a 404, so callers don't have to check for null.
-   *
-   * @throws AppException 404 if no user has this id
-   */
+  // returns the user or throws a 404
   private async findUserById(id: Types.ObjectId) {
     const user: User | null = await this.userModel.findById(id);
     if (!user) {
@@ -157,13 +130,9 @@ export class UserService {
     return user;
   }
 
-  /**
-   * Fails if another user already has this username, ignoring letter case.
-   * The user being updated is excluded, so they can change the case of their
-   * own username (e.g. reader_1 → Reader_1).
-   *
-   * @throws AppException 409 if the username is taken
-   */
+  // throws a 409 if another user already has this username
+  // skips the user's own record so they can change the case of their own
+  // username, like reader_1 to Reader_1
   private async userNameExist(username: string, id: Types.ObjectId) {
     const taken = await this.userModel
       .exists({ username, _id: { $ne: id } })
@@ -173,14 +142,9 @@ export class UserService {
     }
   }
 
-  /**
-   * Fails if the email or username is already registered. Usernames are
-   * compared ignoring letter case.
-   *
-   * @throws AppException 409 if either is taken
-   */
+  // throws a 409 if the email or username is already taken
   private async userNameOrEmailExist(email: string, username: string) {
-    // Run both lookups at the same time
+    // collation makes the username check ignore upper/lower case
     const [emailTaken, usernameTaken] = await Promise.all([
       this.userModel.exists({ email }),
       this.userModel.exists({ username }).collation(USERNAME_COLLATION),

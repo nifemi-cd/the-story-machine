@@ -9,7 +9,7 @@ import { StoryService } from './story.service.js';
 import { Story } from './entities/story.entity.js';
 import { StoryStatus } from './enums/story-status.enum.js';
 
-/** Wraps a value the way Mongoose queries return it from .exec(). */
+// mongoose queries are awaited through .exec() so the mocks need it too
 const execResolving = (value: unknown) => ({
   exec: () => Promise.resolve(value),
 });
@@ -17,7 +17,7 @@ const execResolving = (value: unknown) => ({
 describe('StoryService', () => {
   let service: StoryService;
   const authorId = new Types.ObjectId().toString();
-  // find() returns a chainable query; each step records its argument
+  // find() is chained (sort, skip, limit) so each step returns the same mock
   const query = {
     sort: vi.fn(() => query),
     skip: vi.fn(() => query),
@@ -36,7 +36,7 @@ describe('StoryService', () => {
   };
   const userModel = { exists: vi.fn(), findById: vi.fn() };
   const chapterModel = { deleteMany: vi.fn() };
-  // Stands in for Azure, so tests never upload real files
+  // fake storage so unit tests never upload anything to azure
   const storage = { upload: vi.fn(), download: vi.fn(), delete: vi.fn() };
 
   beforeEach(async () => {
@@ -206,7 +206,6 @@ describe('StoryService', () => {
       storyModel.findByIdAndUpdate.mockReturnValue(execResolving(updated));
     });
 
-    /** The changes passed to findByIdAndUpdate by the last update() call. */
     const sentChanges = () =>
       storyModel.findByIdAndUpdate.mock.calls[0][1] as Record<string, unknown>;
 
@@ -220,7 +219,7 @@ describe('StoryService', () => {
         { title: 'New' },
         { returnDocument: 'after', runValidators: true },
       );
-      // Without a status change there's no need to load the story first
+      // no status means it shouldn't bother loading the story first
       expect(storyModel.findById).not.toHaveBeenCalled();
     });
 

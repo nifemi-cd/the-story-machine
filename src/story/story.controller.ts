@@ -34,22 +34,15 @@ import {
 } from '../common/swagger/api-response.decorators.js';
 import { ApiObjectIdParam } from '../common/swagger/api-param.decorators.js';
 
-// Largest story file accepted, in bytes (10 MB)
+// 10 MB
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
-/**
- * Story routes under /api/v1/story. Request bodies are validated against
- * their DTOs before these methods run, and responses are wrapped in
- * `{ success, message, data }` by the ResponseInterceptor.
- *
- * The @Api* decorators only describe the routes for the docs at /api/docs.
- */
 @ApiTags('Stories')
 @Controller({ path: 'story', version: '1' })
 export class StoryController {
   constructor(private readonly storyService: StoryService) {}
 
-  /** POST /api/v1/story: start a new draft story. */
+  // creates a new story and returns it
   @Post()
   @ResponseMessage('Story created')
   @ApiOperation({
@@ -65,7 +58,7 @@ export class StoryController {
     return this.storyService.create(createStoryDto);
   }
 
-  /** GET /api/v1/story?status=published&page=1: list stories one page at a time. */
+  // returns one page of stories
   @Get()
   @ResponseMessage('Stories fetched')
   @ApiOperation({
@@ -81,7 +74,7 @@ export class StoryController {
     return this.storyService.findAll(query);
   }
 
-  /** GET /api/v1/story/:id: get one story. */
+  // returns one story
   @Get(':id')
   @ResponseMessage('Story fetched')
   @ApiOperation({ summary: 'Get a story by id' })
@@ -93,7 +86,7 @@ export class StoryController {
     return this.storyService.findOne(id);
   }
 
-  /** PATCH /api/v1/story/:id: change some of a story's fields, or publish it. */
+  // updates a story and returns the updated story
   @Patch(':id')
   @ResponseMessage('Story updated')
   @ApiOperation({
@@ -112,7 +105,7 @@ export class StoryController {
     return this.storyService.update(id, updateStoryDto);
   }
 
-  /** DELETE /api/v1/story/:id: delete a story and its chapters for good. */
+  // deletes a story, returns nothing
   @Delete(':id')
   @ResponseMessage('Story deleted')
   @ApiOperation({
@@ -128,10 +121,10 @@ export class StoryController {
     return this.storyService.remove(id);
   }
 
-  /** PUT /api/v1/story/:id/file: upload the story's .txt draft file. */
+  // uploads the story's txt file and returns the updated story
   @Put(':id/file')
   @ResponseMessage('Story file uploaded')
-  // Reads the "file" form field into memory; larger files are rejected with a 413
+  // multer reads the "file" field into memory and sends back a 413 if it's too big
   @UseInterceptors(
     FileInterceptor('file', { limits: { fileSize: MAX_FILE_SIZE } }),
   )
@@ -160,7 +153,7 @@ export class StoryController {
     return this.storyService.uploadFile(id, file);
   }
 
-  /** GET /api/v1/story/:id/file: download the story's .txt draft file. */
+  // returns the raw file instead of json, the response interceptor skips StreamableFile
   @Get(':id/file')
   @ApiOperation({
     summary: 'Download the story file',

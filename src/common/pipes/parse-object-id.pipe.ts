@@ -6,27 +6,18 @@ import {
 import { Types } from 'mongoose';
 import { AppException } from '../exceptions/app.exception.js';
 
-// Types.ObjectId.isValid() also accepts any 12-character string, so require
-// the 24-character hex form that clients actually send
+// not using Types.ObjectId.isValid because it also says yes to any 12 character string
 const OBJECT_ID_PATTERN = /^[0-9a-f]{24}$/i;
 
-/**
- * Turns an `:id` route parameter into a MongoDB ObjectId, or rejects the
- * request with a 400 if it isn't a valid id.
- *
- * Without it, a bad id like "/user/123" would reach the database and fail
- * there with a 500.
- *
- * The error names the route parameter it came from, e.g. "storyId".
- *
- * @example
- * findOne(@Param('id', ParseObjectIdPipe) id: Types.ObjectId)
- */
+// Without this something like /user/123 would make it all the way to mongo
+// and come back as a 500. Now it's a 400 that says which param was wrong
+// (id, storyId, etc).
 @Injectable()
 export class ParseObjectIdPipe implements PipeTransform<
   string,
   Types.ObjectId
 > {
+  // returns the param as an ObjectId, or throws a 400 if it isn't valid
   transform(value: string, metadata?: ArgumentMetadata): Types.ObjectId {
     if (!OBJECT_ID_PATTERN.test(value)) {
       const field = metadata?.data ?? 'id';

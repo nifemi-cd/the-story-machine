@@ -1,15 +1,9 @@
 import { ApiParam } from '@nestjs/swagger';
 
-/**
- * Documents a MongoDB ObjectId route parameter. Without it Swagger would
- * describe the param as an ObjectId class instead of a string.
- *
- * @param resource label shown in the description, e.g. 'Story'
- * @param name the route parameter, 'id' by default
- *
- * @example
- * @ApiObjectIdParam('Story', 'storyId')
- */
+// returns a swagger decorator for an id param
+// Without this swagger shows id params as an ObjectId object instead of a
+// string, because of the ParseObjectIdPipe type.
+// usage @ApiObjectIdParam('Story', 'storyId')
 export function ApiObjectIdParam(resource: string, name = 'id') {
   return ApiParam({
     name,

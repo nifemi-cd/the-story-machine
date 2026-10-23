@@ -18,7 +18,7 @@ describe('UserService', () => {
   let emailExists: boolean;
   let usernameExists: boolean;
   const collation = vi.fn();
-  // find() returns a chainable query; each step records its argument
+  // find() is chained (sort, skip, limit) so each step returns the same mock
   const query = {
     sort: vi.fn(() => query),
     skip: vi.fn(() => query),
@@ -47,7 +47,7 @@ describe('UserService', () => {
       if ('email' in filter) {
         return Promise.resolve(emailExists ? { _id: 'a' } : null);
       }
-      // The username lookup is chained with .collation()
+      // the username check calls .collation() after exists()
       return {
         collation: collation.mockImplementation(() =>
           Promise.resolve(usernameExists ? { _id: 'b' } : null),
@@ -94,7 +94,6 @@ describe('UserService', () => {
     expect(collation).toHaveBeenCalledWith(USERNAME_COLLATION);
   });
 
-  /** Signs up `dto` and checks it fails with the "already taken" 409. */
   async function expectTakenConflict() {
     const error = await service.create({ ...dto }).catch((e: unknown) => e);
 

@@ -17,11 +17,6 @@ import {
 } from './entities/story.entity.js';
 import { StoryStatus } from './enums/story-status.enum.js';
 
-/**
- * Business logic for stories: creating, listing, lookup, updates and
- * deleting, plus keeping each story's chapterOrder in step with its chapters
- * and storing its draft file in Azure Blob Storage.
- */
 @Injectable()
 export class StoryService {
   constructor(
@@ -31,13 +26,9 @@ export class StoryService {
     private readonly storage: StorageService,
   ) {}
 
-  /**
-   * Creates a draft story with no chapters.
-   *
-   * @throws AppException 400 if authorId doesn't belong to a user
-   */
+  // creates a draft story and returns it
   async create(createStoryDto: CreateStoryDto): Promise<StoryDocument> {
-    // MongoDB doesn't enforce references, so check the author exists ourselves
+    // mongo won't stop us saving a fake authorId, so check it here
     await this.authorExist(createStoryDto.authorId);
 
     const { characters, ...fields } = createStoryDto;
@@ -47,10 +38,7 @@ export class StoryService {
     });
   }
 
-  /**
-   * Returns one page of stories, newest first, optionally only one author's
-   * or only those with a given status.
-   */
+  // returns one page of stories, newest first, plus the pagination info
   async findAll({
     page,
     limit,
@@ -61,11 +49,10 @@ export class StoryService {
     if (authorId) filter.authorId = new Types.ObjectId(authorId);
     if (status) filter.status = status;
 
-    // Fetch the page and count all matches at the same time
     const [items, total] = await Promise.all([
       this.storyModel
         .find(filter)
-        // _id breaks ties so pages never overlap or skip stories
+        // sorting by _id too so stories with the same createdAt don't jump between pages
         .sort({ createdAt: -1, _id: -1 })
         .skip((page - 1) * limit)
         .limit(limit)
@@ -79,21 +66,13 @@ export class StoryService {
     };
   }
 
-  /**
-   * Returns a single story by id.
-   *
-   * @throws AppException 404 if no story has this id
-   */
+  // returns one story or throws a 404
   async findOne(id: Types.ObjectId) {
     return await this.findStoryById(id);
   }
 
-  /**
-   * Returns a story together with its author's username, for the reader
-   * payload, which shows the author by name.
-   *
-   * @throws AppException 404 if no story has this id
-   */
+  // returns the story and its author's username
+  // the chapter routes show the author's username instead of their id
   async findWithAuthorName(
     id: Types.ObjectId,
   ): Promise<{ story: StoryDocument; author: string }> {
@@ -102,17 +81,11 @@ export class StoryService {
       .findById(story.authorId)
       .select('username')
       .exec();
-    // Users can't be deleted yet, so a missing author shouldn't happen
+    // users can't be deleted yet so this should always find someone
     return { story, author: user?.username ?? '' };
   }
 
-  /**
-   * Updates only the fields sent (PATCH) and returns the updated story.
-   * Changing the status also sets publishedAt: now when published, null
-   * when moved back to draft. Characters, when sent, replace the whole list.
-   *
-   * @throws AppException 404 if no story has this id
-   */
+  // updates the fields that were sent and returns the updated story
   async update(
     id: Types.ObjectId,
     updateStoryDto: UpdateStoryDto,
@@ -121,7 +94,8 @@ export class StoryService {
     const changes: Record<string, unknown> = withoutUndefined(fields);
     if (characters) changes.characters = toCharacters(characters);
 
-    // Only touch publishedAt when the status actually changes
+    // only reset publishedAt if the status is actually different, otherwise
+    // re-sending "published" would bump the date every time
     if (status) {
       const story = await this.findStoryById(id);
       if (story.status !== status) {
@@ -133,9 +107,8 @@ export class StoryService {
 
     const story = await this.storyModel
       .findByIdAndUpdate(id, changes, {
-        // Return the story after the change, not before
         returnDocument: 'after',
-        // Apply schema rules (e.g. title max length) to updates too
+        // schema rules like maxlength don't run on updates unless we ask
         runValidators: true,
       })
       .exec();
@@ -145,14 +118,9 @@ export class StoryService {
     return story;
   }
 
-  /**
-   * Deletes the story, all of its chapters and its draft file, for good.
-   *
-   * The story goes first: if deleting the rest then fails, it's left
-   * behind unlisted, rather than a story listing chapters that are gone.
-   *
-   * @throws AppException 404 if no story has this id
-   */
+  // deletes the story along with its chapters and file, returns nothing
+  // deletes the story first, so if cleaning up chapters or the file fails
+  // we're left with leftovers nobody can see instead of a broken story
   async remove(id: Types.ObjectId): Promise<void> {
     const story = await this.storyModel.findByIdAndDelete(id).exec();
     if (!story) {
@@ -162,13 +130,7 @@ export class StoryService {
     await this.storage.delete(draftFileName(id));
   }
 
-  /**
-   * Saves a plain text file as the story's draft, replacing any earlier one,
-   * and returns the story with draftUrl set.
-   *
-   * @throws AppException 400 if no file was sent or it isn't plain text
-   * @throws AppException 404 if no story has this id
-   */
+  // saves the txt file to storage and returns the story with draftUrl set
   async uploadFile(
     id: Types.ObjectId,
     file?: Express.Multer.File,
@@ -182,7 +144,7 @@ export class StoryService {
         },
       ]);
     }
-    // Check first, so no file is stored for a story that doesn't exist
+    // check before uploading so we don't store files for stories that don't exist
     await this.findStoryById(id);
 
     const url = await this.storage.upload(
@@ -193,18 +155,14 @@ export class StoryService {
     const story = await this.storyModel
       .findByIdAndUpdate(id, { draftUrl: url }, { returnDocument: 'after' })
       .exec();
-    // Deleted while the file was uploading
+    // could happen if the story got deleted while the upload was running
     if (!story) {
       throw AppException.notfound('Story not found');
     }
     return story;
   }
 
-  /**
-   * Returns the contents of the story's draft file.
-   *
-   * @throws AppException 404 if no story has this id, or it has no file yet
-   */
+  // returns the contents of the story's file
   async getFile(id: Types.ObjectId): Promise<Buffer> {
     const story = await this.findStoryById(id);
     if (!story.draftUrl) {
@@ -213,24 +171,15 @@ export class StoryService {
     return await this.storage.download(draftFileName(id));
   }
 
-  /**
-   * Fails unless the story exists. Used by chapter routes before listing.
-   *
-   * @throws AppException 404 if no story has this id
-   */
+  // throws a 404 if the story doesn't exist, returns nothing
   async ensureExists(id: Types.ObjectId): Promise<void> {
     if (!(await this.storyModel.exists({ _id: id }))) {
       throw AppException.notfound('Story not found');
     }
   }
 
-  /**
-   * Adds a chapter to the end of the story's chapterOrder and returns its
-   * position (0-based). Done in one atomic update so two chapters added at
-   * the same time can't get the same position.
-   *
-   * @throws AppException 404 if no story has this id
-   */
+  // returns the new chapter's position. $push does it in one step so two
+  // chapters added at the same time can't end up with the same position
   async addChapter(
     storyId: Types.ObjectId,
     chapterId: Types.ObjectId,
@@ -251,7 +200,7 @@ export class StoryService {
     );
   }
 
-  /** Updates the chapter's title in the story's chapterOrder. */
+  // updates the chapter's title in chapterOrder
   async renameChapter(
     storyId: Types.ObjectId,
     chapterId: Types.ObjectId,
@@ -260,13 +209,13 @@ export class StoryService {
     await this.storyModel
       .updateOne(
         { _id: storyId, 'chapterOrder.chapterId': chapterId },
-        // $ is the chapterOrder entry matched by the filter
+        // the $ means "whichever chapterOrder entry matched the filter"
         { $set: { 'chapterOrder.$.title': title } },
       )
       .exec();
   }
 
-  /** Removes the chapter from the story's chapterOrder. */
+  // removes the chapter from chapterOrder
   async removeChapter(
     storyId: Types.ObjectId,
     chapterId: Types.ObjectId,
@@ -276,11 +225,7 @@ export class StoryService {
       .exec();
   }
 
-  /**
-   * Loads a story or fails with a 404, so callers don't have to check for null.
-   *
-   * @throws AppException 404 if no story has this id
-   */
+  // returns the story or throws a 404
   private async findStoryById(id: Types.ObjectId): Promise<StoryDocument> {
     const story = await this.storyModel.findById(id).exec();
     if (!story) {
@@ -289,11 +234,7 @@ export class StoryService {
     return story;
   }
 
-  /**
-   * Fails if no user has this id.
-   *
-   * @throws AppException 400 naming the authorId field
-   */
+  // throws a 400 if the author doesn't exist
   private async authorExist(authorId: string) {
     if (!(await this.userModel.exists({ _id: authorId }))) {
       throw AppException.badRequest('Author not found', [
@@ -307,11 +248,9 @@ export class StoryService {
   }
 }
 
-/**
- * Turns the characters from a request into what's stored: unsent optional
- * fields become null, and every character gets a "default" emotion (first)
- * for dialogue lines that don't pick a portrait.
- */
+// returns the characters in the shape we save
+// every character gets a "default" emotion so dialogue lines without a
+// portrait still have something to show
 function toCharacters(characters: CharacterDto[]): Character[] {
   return characters.map(({ name, description, emotions = [] }) => {
     const names = emotions.map((e) => e.emotion);
@@ -328,12 +267,13 @@ function toCharacters(characters: CharacterDto[]): Character[] {
   });
 }
 
-/** Where a story's draft file is kept in the storage container. */
+// returns where the story's file is kept in storage
 function draftFileName(id: Types.ObjectId): string {
   return `drafts/${id.toString()}.txt`;
 }
 
-/** Drops keys whose value is undefined, so a PATCH only sets what was sent. */
+// returns the object without the undefined fields
+// so a PATCH doesn't overwrite fields the client didn't send
 function withoutUndefined(object: object): Record<string, unknown> {
   return Object.fromEntries(
     Object.entries(object).filter(([, value]) => value !== undefined),

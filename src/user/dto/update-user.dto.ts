@@ -1,13 +1,8 @@
 import { OmitType, PartialType } from '@nestjs/swagger';
 import { CreateUserDto } from './create-user.dto.js';
 
-/**
- * Body of PATCH /api/v1/user/:id. Same rules as sign-up, but every field
- * is optional so clients send only what changes.
- *
- * Email and password changes need their own flows (re-verification and
- * hashing), so they can't be set through a general profile update.
- */
+// email and password are left out on purpose, changing those should be its
+// own flow later (verifying the new email, hashing the password etc)
 export class UpdateUserDto extends PartialType(
   OmitType(CreateUserDto, ['email', 'password'] as const),
 ) {}

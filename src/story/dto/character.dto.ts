@@ -12,14 +12,11 @@ import {
   ValidateNested,
 } from 'class-validator';
 
-// Trim before validation so "  " counts as empty
+// trim first so a name that's only spaces fails IsNotEmpty
 const trim = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() : value;
 
-/**
- * One emotion in a character's `emotions` list. Portrait positions come in a
- * later sprint, so they may be sent but must be null.
- */
+// portrait_x and portrait_y aren't used yet, so they're only allowed as null
 export class EmotionDto {
   @ApiProperty({ example: 'angry', maxLength: 50 })
   @Transform(trim)
@@ -34,7 +31,7 @@ export class EmotionDto {
     nullable: true,
     example: null,
   })
-  // IsOptional lets null and undefined through, so anything else fails Equals
+  // IsOptional lets null through, anything else gets caught by Equals(null)
   @IsOptional()
   @Equals(null)
   portrait_x?: null;
@@ -50,10 +47,6 @@ export class EmotionDto {
   portrait_y?: null;
 }
 
-/**
- * One entry in the `characters` list of story requests. A "default"
- * emotion is added by the server if it isn't sent.
- */
 export class CharacterDto {
   @ApiProperty({
     description: 'Unique within the story; dialogue lines use it as `name`',
@@ -88,7 +81,7 @@ export class CharacterDto {
   @ArrayUnique((emotion: EmotionDto) => emotion.emotion, {
     message: 'emotions must have unique names',
   })
-  // Turns each plain object into an EmotionDto so its own rules run
+  // without @Type the nested emotions are plain objects and their rules never run
   @ValidateNested({ each: true })
   @Type(() => EmotionDto)
   emotions?: EmotionDto[];

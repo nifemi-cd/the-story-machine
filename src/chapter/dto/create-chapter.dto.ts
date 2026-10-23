@@ -9,16 +9,11 @@ import {
 } from 'class-validator';
 import { ScriptDto } from './script.dto.js';
 
-/**
- * Body of POST /api/v1/story/:storyId/chapter, using the story JSON
- * contract's field names. The new chapter is added to the end of the story.
- *
- * The contract's other fields come from the server: story_id from the URL,
- * chapter_id is generated, and title and author from the parent story.
- */
+// Uses the contract's field names. The rest of the contract fields don't
+// come from the client, story_id is in the url and title/author come from the story.
 export class CreateChapterDto {
   @ApiProperty({ example: 'Chapter 1', maxLength: 120 })
-  // Trim before validation so "  " counts as empty
+  // trim first so a name that's only spaces fails IsNotEmpty
   @Transform(({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.trim() : value,
   )
@@ -33,7 +28,7 @@ export class CreateChapterDto {
     type: ScriptDto,
   })
   @IsOptional()
-  // Turns the plain object into a ScriptDto so its own rules run
+  // needed so the nested script actually gets validated
   @ValidateNested()
   @Type(() => ScriptDto)
   story?: ScriptDto;

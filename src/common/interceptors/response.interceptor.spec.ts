@@ -8,7 +8,6 @@ import { firstValueFrom, of } from 'rxjs';
 import { RESPONSE_MESSAGE_KEY } from '../decorators/response-message.decorator.js';
 import { ResponseInterceptor } from './response.interceptor.js';
 
-/** A fake HTTP request context for the given route handler. */
 function httpContext(handler: () => void) {
   return {
     getType: () => 'http',
@@ -17,7 +16,6 @@ function httpContext(handler: () => void) {
   } as unknown as ExecutionContext;
 }
 
-/** A fake route handler that returns `value`. */
 const returning = (value: unknown): CallHandler => ({
   handle: () => of(value),
 });

@@ -7,14 +7,11 @@ import {
 import { User } from '../../user/entities/user.entity.js';
 import { StoryStatus } from '../enums/story-status.enum.js';
 
-/**
- * One entry in a story's table of contents. The title is copied from the
- * chapter so the contents can be shown without loading every chapter.
- * `_id: false` because the chapterId already identifies the entry.
- */
+// basically the table of contents. we copy the title in here so we can show
+// the list of chapters without loading every chapter
 @Schema({ _id: false })
 export class ChapterRef {
-  // Named as a string to avoid a circular import with the chapter entity
+  // 'Chapter' as a string because importing the class would be a circular import
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Chapter', required: true })
   chapterId: Types.ObjectId;
 
@@ -24,16 +21,12 @@ export class ChapterRef {
 
 export const ChapterRefSchema = SchemaFactory.createForClass(ChapterRef);
 
-/**
- * One of a character's emotions. Dialogue lines pick one by name as their
- * `portrait`. Field names follow the story JSON contract (snake_case).
- */
 @Schema({ _id: false })
 export class Emotion {
   @Prop({ required: true, trim: true })
   emotion: string;
 
-  // Placeholders: where the portrait sits on screen, set in a later sprint
+  // where the portrait goes on screen, not used until a later sprint
   @Prop({ type: Number, default: null })
   portrait_x: number | null;
 
@@ -43,12 +36,9 @@ export class Emotion {
 
 export const EmotionSchema = SchemaFactory.createForClass(Emotion);
 
-/**
- * A character in the story. Dialogue lines refer to it by name.
- * Stored as a list rather than the contract's name-keyed object because
- * MongoDB keys can't contain "." (e.g. "Dr. Smith"); the reader endpoint
- * turns the list into that object.
- */
+// The contract has characters as an object keyed by name, but mongo keys
+// can't have a "." in them (Dr. Smith would break), so we store a list and
+// turn it into the object when sending it back.
 @Schema({ _id: false })
 export class Character {
   @Prop({ required: true, trim: true })
@@ -57,21 +47,15 @@ export class Character {
   @Prop({ type: String, default: null })
   description: string | null;
 
-  // Always includes "default", the portrait used when a line doesn't set one
+  // always has "default" in it, see toCharacters in the story service
   @Prop({ type: [EmotionSchema], default: [] })
   emotions: Emotion[];
 }
 
 export const CharacterSchema = SchemaFactory.createForClass(Character);
 
-/**
- * A story as stored in the "stories" collection. Its chapters live in their
- * own collection; `chapterOrder` keeps their order and titles here.
- * `timestamps: true` makes Mongoose fill in createdAt and updatedAt.
- */
 @Schema({ timestamps: true })
 export class Story {
-  // The user who wrote the story
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: User.name, required: true })
   authorId: Types.ObjectId;
 
@@ -88,23 +72,24 @@ export class Story {
   })
   status: StoryStatus;
 
-  // Placeholder: link to the draft file in Azure Blob Storage, set once uploads exist
+  // url of the uploaded .txt in azure, null until something is uploaded
   @Prop({ type: String, default: null })
   draftUrl: string | null;
 
-  // Set when the story is published; cleared if it goes back to draft
+  // set when published, goes back to null if it's moved back to draft
   @Prop({ type: Date, default: null })
   publishedAt: Date | null;
 
-  // Kept in step by the chapter routes, never set directly from requests
+  // only the chapter routes change this, never the story PATCH
   @Prop({ type: [ChapterRefSchema], default: [] })
   chapterOrder: ChapterRef[];
 
-  // Shared by every chapter, so each chapter's dialogue can use the same cast
+  // on the story instead of each chapter so all chapters share the same cast
   @Prop({ type: [CharacterSchema], default: [] })
   characters: Character[];
 
-  // Cached counts, so story cards don't have to count records (likes, comments and reads aren't built yet)
+  // stored as numbers so story cards don't have to count everything
+  // (likes, comments and reads aren't built yet)
   @Prop({ default: 0, min: 0 })
   likeCount: number;
 
@@ -114,18 +99,16 @@ export class Story {
   @Prop({ default: 0, min: 0 })
   readCount: number;
 
-  // Filled in by Mongoose because of timestamps: true
   createdAt: Date;
   updatedAt: Date;
 }
 
-// A Story loaded from the database, with Mongoose methods like .save()
 export type StoryDocument = HydratedDocument<Story>;
 export const StorySchema = SchemaFactory.createForClass(Story);
 
-// "My stories" lists, newest first
+// for the "my stories" page
 StorySchema.index({ authorId: 1, createdAt: -1 });
-// The published feed, newest first
+// for the published feed
 StorySchema.index({ status: 1, createdAt: -1 });
 
 StorySchema.set('toJSON', { versionKey: false });

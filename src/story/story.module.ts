@@ -7,23 +7,20 @@ import { User, UserSchema } from '../user/entities/user.entity.js';
 import { Chapter, ChapterSchema } from '../chapter/entities/chapter.entity.js';
 import { StorageModule } from '../storage/storage.module.js';
 
-/** Everything for stories: the routes, the service and the Story model. */
 @Module({
   imports: [
-    // Makes the models injectable with @InjectModel(...)
-    // (User is only read, to check a story's author exists; Chapter is only
-    // used to delete a story's chapters along with it)
+    // User is needed to check the author exists, Chapter so deleting a
+    // story can delete its chapters too
     MongooseModule.forFeature([
       { name: Story.name, schema: StorySchema },
       { name: User.name, schema: UserSchema },
       { name: Chapter.name, schema: ChapterSchema },
     ]),
-    // Stores each story's draft file in Azure Blob Storage
     StorageModule,
   ],
   controllers: [StoryController],
   providers: [StoryService],
-  // The chapter module uses it to keep chapterOrder in step
+  // ChapterService uses it to keep chapterOrder up to date
   exports: [StoryService],
 })
 export class StoryModule {}
