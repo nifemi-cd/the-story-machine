@@ -4,6 +4,7 @@ import { Types } from 'mongoose';
 import { AppException } from '../common/exceptions/app.exception.js';
 import { User } from '../user/entities/user.entity.js';
 import { Chapter } from '../chapter/entities/chapter.entity.js';
+import { StorageService } from '../storage/storage.service.js';
 import { StoryService } from './story.service.js';
 import { Story } from './entities/story.entity.js';
 import { StoryStatus } from './enums/story-status.enum.js';
@@ -35,6 +36,8 @@ describe('StoryService', () => {
   };
   const userModel = { exists: vi.fn(), findById: vi.fn() };
   const chapterModel = { deleteMany: vi.fn() };
+  // Stands in for Azure, so tests never upload real files
+  const storage = { upload: vi.fn(), download: vi.fn(), delete: vi.fn() };
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -50,6 +53,7 @@ describe('StoryService', () => {
         { provide: getModelToken(Story.name), useValue: storyModel },
         { provide: getModelToken(User.name), useValue: userModel },
         { provide: getModelToken(Chapter.name), useValue: chapterModel },
+        { provide: StorageService, useValue: storage },
       ],
     }).compile();
 
@@ -293,21 +297,111 @@ describe('StoryService', () => {
       chapterModel.deleteMany.mockReturnValue(execResolving({}));
     });
 
-    it('deletes the story, then its chapters', async () => {
+    it('deletes the story, then its chapters and draft file', async () => {
       storyModel.findByIdAndDelete.mockReturnValue(execResolving({ _id: id }));
 
       await expect(service.remove(id)).resolves.toBeUndefined();
       expect(storyModel.findByIdAndDelete).toHaveBeenCalledWith(id);
       expect(chapterModel.deleteMany).toHaveBeenCalledWith({ storyId: id });
+      expect(storage.delete).toHaveBeenCalledWith(
+        `drafts/${id.toString()}.txt`,
+      );
     });
 
-    it('throws a 404 and deletes no chapters when the story does not exist', async () => {
+    it('throws a 404 and deletes nothing else when the story does not exist', async () => {
       storyModel.findByIdAndDelete.mockReturnValue(execResolving(null));
 
       const error = await service.remove(id).catch((e: unknown) => e);
 
       expect((error as AppException).getStatus()).toBe(404);
       expect(chapterModel.deleteMany).not.toHaveBeenCalled();
+      expect(storage.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('uploadFile', () => {
+    const id = new Types.ObjectId();
+    const textFile = {
+      mimetype: 'text/plain',
+      buffer: Buffer.from('Once upon a time...'),
+    } as Express.Multer.File;
+    const url = `https://example.blob.core.windows.net/stories/drafts/${id.toString()}.txt`;
+
+    beforeEach(() => {
+      storyModel.findById.mockReturnValue(execResolving({ _id: id }));
+      storage.upload.mockResolvedValue(url);
+      storyModel.findByIdAndUpdate.mockReturnValue(
+        execResolving({ _id: id, draftUrl: url }),
+      );
+    });
+
+    it('uploads the file and saves its URL as draftUrl', async () => {
+      const story = await service.uploadFile(id, textFile);
+
+      expect(storage.upload).toHaveBeenCalledWith(
+        `drafts/${id.toString()}.txt`,
+        textFile.buffer,
+        'text/plain; charset=utf-8',
+      );
+      expect(storyModel.findByIdAndUpdate).toHaveBeenCalledWith(
+        id,
+        { draftUrl: url },
+        { returnDocument: 'after' },
+      );
+      expect(story.draftUrl).toBe(url);
+    });
+
+    it.each([
+      ['no file is sent', undefined],
+      [
+        'the file is not plain text',
+        { ...textFile, mimetype: 'image/png' } as Express.Multer.File,
+      ],
+    ])('throws a 400 naming the file field when %s', async (_, file) => {
+      const error = await service.uploadFile(id, file).catch((e: unknown) => e);
+
+      expect((error as AppException).getStatus()).toBe(400);
+      expect((error as AppException).errors?.[0].field).toBe('file');
+      expect(storage.upload).not.toHaveBeenCalled();
+    });
+
+    it('throws a 404 and uploads nothing when the story does not exist', async () => {
+      storyModel.findById.mockReturnValue(execResolving(null));
+
+      const error = await service
+        .uploadFile(id, textFile)
+        .catch((e: unknown) => e);
+
+      expect((error as AppException).getStatus()).toBe(404);
+      expect(storage.upload).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getFile', () => {
+    const id = new Types.ObjectId();
+
+    it('returns the draft file contents', async () => {
+      const content = Buffer.from('Once upon a time...');
+      storyModel.findById.mockReturnValue(
+        execResolving({ _id: id, draftUrl: 'https://example/draft.txt' }),
+      );
+      storage.download.mockResolvedValue(content);
+
+      await expect(service.getFile(id)).resolves.toBe(content);
+      expect(storage.download).toHaveBeenCalledWith(
+        `drafts/${id.toString()}.txt`,
+      );
+    });
+
+    it('throws a 404 when the story has no file yet', async () => {
+      storyModel.findById.mockReturnValue(
+        execResolving({ _id: id, draftUrl: null }),
+      );
+
+      const error = await service.getFile(id).catch((e: unknown) => e);
+
+      expect((error as AppException).getStatus()).toBe(404);
+      expect(storage.download).not.toHaveBeenCalled();
     });
   });
 

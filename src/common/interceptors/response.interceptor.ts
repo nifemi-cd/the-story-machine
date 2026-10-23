@@ -1,5 +1,6 @@
 import {
   Injectable,
+  StreamableFile,
   type CallHandler,
   type ExecutionContext,
   type NestInterceptor,
@@ -30,7 +31,8 @@ function isPaginatedResult(value: unknown): value is PaginatedResult<unknown> {
  * so controllers just return the data.
  *
  * For paginated results, the items become `data` and the pagination
- * details move to a top-level `meta` field.
+ * details move to a top-level `meta` field. Files (StreamableFile) are
+ * sent as they are, since wrapping them in JSON would break the download.
  */
 @Injectable()
 export class ResponseInterceptor implements NestInterceptor {
@@ -53,10 +55,12 @@ export class ResponseInterceptor implements NestInterceptor {
     return next
       .handle()
       .pipe(
-        map((data: unknown): ApiSuccessResponse<unknown> =>
-          isPaginatedResult(data)
-            ? { success: true, message, data: data.items, meta: data.meta }
-            : { success: true, message, data: data ?? null },
+        map((data: unknown): ApiSuccessResponse<unknown> | StreamableFile =>
+          data instanceof StreamableFile
+            ? data
+            : isPaginatedResult(data)
+              ? { success: true, message, data: data.items, meta: data.meta }
+              : { success: true, message, data: data ?? null },
         ),
       );
   }

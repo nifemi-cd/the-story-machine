@@ -1,4 +1,8 @@
-import type { CallHandler, ExecutionContext } from '@nestjs/common';
+import {
+  StreamableFile,
+  type CallHandler,
+  type ExecutionContext,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { firstValueFrom, of } from 'rxjs';
 import { RESPONSE_MESSAGE_KEY } from '../decorators/response-message.decorator.js';
@@ -63,5 +67,18 @@ describe('ResponseInterceptor', () => {
       data: ['a'],
       meta,
     });
+  });
+
+  it('sends files as they are, without wrapping them', async () => {
+    const file = new StreamableFile(Buffer.from('Once upon a time...'));
+
+    const result = await firstValueFrom(
+      interceptor.intercept(
+        httpContext(() => undefined),
+        returning(file),
+      ),
+    );
+
+    expect(result).toBe(file);
   });
 });

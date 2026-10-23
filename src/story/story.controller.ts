@@ -6,9 +6,20 @@ import {
   Body,
   Patch,
   Param,
+  Put,
   Query,
+  StreamableFile,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import {
+  ApiBody,
+  ApiConsumes,
+  ApiOperation,
+  ApiProduces,
+  ApiTags,
+} from '@nestjs/swagger';
 import { Types } from 'mongoose';
 import { StoryService } from './story.service.js';
 import { CreateStoryDto } from './dto/create-story.dto.js';
@@ -22,6 +33,9 @@ import {
   ApiError,
 } from '../common/swagger/api-response.decorators.js';
 import { ApiObjectIdParam } from '../common/swagger/api-param.decorators.js';
+
+// Largest story file accepted, in bytes (10 MB)
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 /**
  * Story routes under /api/v1/story. Request bodies are validated against
@@ -112,5 +126,55 @@ export class StoryController {
   @ApiError(404, 'Story not found')
   remove(@Param('id', ParseObjectIdPipe) id: Types.ObjectId) {
     return this.storyService.remove(id);
+  }
+
+  /** PUT /api/v1/story/:id/file: upload the story's .txt draft file. */
+  @Put(':id/file')
+  @ResponseMessage('Story file uploaded')
+  // Reads the "file" form field into memory; larger files are rejected with a 413
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: MAX_FILE_SIZE } }),
+  )
+  @ApiOperation({
+    summary: 'Upload the story file',
+    description:
+      'Saves a plain text (.txt) file of up to 10 MB as the story draft, replacing any earlier file.',
+  })
+  @ApiObjectIdParam('Story')
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: { file: { type: 'string', format: 'binary' } },
+    },
+  })
+  @ApiEnvelope(StoryResponseDto, { description: 'Story file uploaded' })
+  @ApiError(400, 'Invalid id, or the file is missing or not plain text')
+  @ApiError(404, 'Story not found')
+  @ApiError(413, 'File is larger than 10 MB')
+  uploadFile(
+    @Param('id', ParseObjectIdPipe) id: Types.ObjectId,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    return this.storyService.uploadFile(id, file);
+  }
+
+  /** GET /api/v1/story/:id/file: download the story's .txt draft file. */
+  @Get(':id/file')
+  @ApiOperation({
+    summary: 'Download the story file',
+    description: 'Sent as a plain text file, not wrapped in { success, data }.',
+  })
+  @ApiObjectIdParam('Story')
+  @ApiProduces('text/plain')
+  @ApiError(400, 'The id is not a valid 24-character hex string')
+  @ApiError(404, 'Story not found, or it has no file yet')
+  async downloadFile(@Param('id', ParseObjectIdPipe) id: Types.ObjectId) {
+    const content = await this.storyService.getFile(id);
+    return new StreamableFile(content, {
+      type: 'text/plain; charset=utf-8',
+      disposition: `attachment; filename="story-${id.toString()}.txt"`,
+    });
   }
 }
