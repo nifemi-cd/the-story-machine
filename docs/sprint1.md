@@ -38,15 +38,15 @@ These tests check the the different parts of the webapp works together, the back
 
 ### Back end testing
 
-We tested the NestJS API with **Vitest** and Nest's testing module (`@nestjs/testing`), which builds just the parts of the app a test needs. In unit tests the MongoDB models are replaced with mocks, so the tests run without a database and we control exactly what each query returns, including "not found" results and database errors. The end-to-end test uses **supertest** to send real HTTP requests to the whole app.
+We tested the NestJS API with **Vitest** and Nest's testing module (`@nestjs/testing`), which builds just the parts of the app a test needs. In unit tests the MongoDB models are replaced with mocks, so the tests run without a database and we control exactly what each query returns, including "not found" results and database errors. The end-to-end tests use **supertest** to send real HTTP requests to the whole app.
 
-| Command              | What it runs                                            |
-| -------------------- | ------------------------------------------------------- |
-| `npm test`           | All unit tests once (this is what CI runs)              |
-| `npm run test:cov`   | The unit tests with a coverage report                   |
-| `npm run test:e2e`   | The end-to-end tests (needs a running MongoDB)          |
+| Command              | What it runs                                                              |
+| -------------------- | ------------------------------------------------------------------------- |
+| `npm test`           | All unit tests once                                                       |
+| `npm run test:cov`   | The unit tests with a coverage report                                     |
+| `npm run test:e2e`   | The end-to-end tests (uses an in-memory MongoDB, so no setup is needed)  |
 
-At the end of Sprint 1 we have **149 unit tests in 17 files**, and all of them pass.
+CI runs both the unit tests and the end-to-end tests. At the end of Sprint 1 we have **149 unit tests in 17 files** and **63 end-to-end tests in 4 files**, and all of them pass.
 
 #### Unit Tests
 
@@ -64,12 +64,16 @@ The frontend's reader and the backend have to agree on the story JSON format, so
 
 #### End-to-End Tests
 
-`test/app.e2e-spec.ts` starts the whole app and sends a real request to the root route (`GET /`), checking the response comes back in the `{ success, message, data }` wrapper. It connects to a real MongoDB, so it isn't part of CI yet (see section 3).
+These start the whole app, with the same validation, response wrapper and error handling as production, and send real HTTP requests to every route (`/api/v1/...`). Each test starts with an empty database. The database is a throwaway in-memory MongoDB (`mongodb-memory-server`) and Azure Blob Storage is replaced with a fake that keeps files in memory, so the tests need no secrets or network access and run in CI.
+
+- **Users** (`user.e2e-spec.ts`): signing up, never returning the password, rejecting weak passwords, unknown fields, and taken emails and usernames, paging, and profile updates (email and password can't be changed there).
+- **Stories** (`story.e2e-spec.ts`): creating, listing and filtering, publishing and unpublishing, deleting a story together with its file, and uploading and downloading the `.txt` draft, including the 10 MB limit and files that aren't plain text.
+- **Chapters** (`chapter.e2e-spec.ts`): adding chapters with and without a script, invalid scripts being rejected, not being able to load a chapter through another story's URL, renaming (which also updates the story's `chapterOrder`), deleting (later chapters move up), and saving the "Lion at the Door" script.
+- **App** (`app.e2e-spec.ts`): the root route (`GET /api/v1`) answers in the `{ success, message, data }` wrapper.
 
 #### Gaps
 
-- The end-to-end tests don't cover the story and chapter routes yet, only the root route.
-- The storage service, which saves draft files to Azure Blob Storage, is mocked in the story tests but has no tests of its own.
+- The storage service, which saves draft files to Azure Blob Storage, is replaced with a fake in the unit and end-to-end tests, so it has no tests of its own against real Azure.
 - There is no minimum coverage that CI enforces.
 
 ## 3 CI Status
@@ -95,8 +99,9 @@ On GitHub Actions, each repository has a workflow called **CI**. It runs wheneve
 2. **Lint** (`npm run lint` / `npm run lint:ci`)
 3. **Format check** (`npm run format:check`): makes sure the code follows our Prettier style.
 4. **Unit tests**: runs all our Vitest tests once.
-5. **Build** (`npm run build`): makes sure the project actually compiles.
-6. **Security audit** (`npm audit --omit=dev --audit-level=high`): fails if a package that ships to users has a vulnerability.
+5. **End-to-end tests** (`npm run test:e2e`, backend only): runs the whole API against an in-memory database.
+6. **Build** (`npm run build`): makes sure the project actually compiles.
+7. **Security audit** (`npm audit --omit=dev --audit-level=high`): fails if a package that ships to users has a vulnerability.
 
 **Why this trigger:** we picked **pull requests** because that's where we review each other's work, so every change gets checked before it's merged into a shared branch. It also runs on **pushes to the shared branches**, so we know `develop`, `staging` and `main` stay working after a merge. We chose not to run it on every push to our personal branches since the pre-commit hook already covers that work.
 
@@ -105,7 +110,7 @@ On GitHub Actions, each repository has a workflow called **CI**. It runs wheneve
 **As the pipeline matures:** we plan to add some more checks:
 
 - **Coverage threshold:** make CI fail if test coverage drops below a set percentage
-- **End-to-end tests in CI:** add a step that runs the backend's end-to-end tests (`npm run test:e2e`), which aren't part of CI yet, and a frontend job that runs browser tests (through Playwright for example)
+- **Frontend end-to-end tests in CI:** the backend's end-to-end tests already run in CI, so the next step is a frontend job that runs browser tests (through Playwright for example)
 
 ## 4 API Documentation
 
