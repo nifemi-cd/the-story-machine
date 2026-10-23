@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Body, Patch, Param, Put } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Put,
+  Delete,
+} from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Types } from 'mongoose';
 import { ChapterService } from './chapter.service.js';
@@ -99,6 +108,25 @@ export class ChapterController {
     @Body() updateChapterDto: UpdateChapterDto,
   ) {
     return this.chapterService.update(storyId, id, updateChapterDto);
+  }
+
+  /** DELETE /api/v1/story/:storyId/chapter/:id: delete a chapter for good. */
+  @Delete(':id')
+  @ResponseMessage('Chapter deleted')
+  @ApiOperation({
+    summary: 'Delete a chapter',
+    description:
+      "Permanently deletes the chapter and removes it from the story's chapterOrder; later chapters move up one place. This cannot be undone.",
+  })
+  @ApiObjectIdParam('Chapter')
+  @ApiEnvelope(null, { description: 'Chapter deleted' })
+  @ApiError(400, 'Invalid storyId or id')
+  @ApiError(404, 'Chapter not found in this story')
+  remove(
+    @Param('storyId', ParseObjectIdPipe) storyId: Types.ObjectId,
+    @Param('id', ParseObjectIdPipe) id: Types.ObjectId,
+  ) {
+    return this.chapterService.remove(storyId, id);
   }
 
   /** PUT /api/v1/story/:storyId/chapter/:id/script: save a chapter's parsed script. */

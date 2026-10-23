@@ -29,6 +29,8 @@ describe('ChapterService', () => {
     find: vi.fn(() => query),
     findOne: vi.fn(),
     findOneAndUpdate: vi.fn(),
+    findOneAndDelete: vi.fn(),
+    updateMany: vi.fn(),
   };
   const storyService = {
     addChapter: vi.fn(),
@@ -185,6 +187,39 @@ describe('ChapterService', () => {
 
       expect((error as AppException).getStatus()).toBe(404);
       expect(storyService.renameChapter).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('remove', () => {
+    beforeEach(() => {
+      chapterModel.updateMany.mockReturnValue(execResolving({}));
+    });
+
+    it('deletes the chapter, takes it out of the story and moves later chapters up', async () => {
+      chapterModel.findOneAndDelete.mockReturnValue(
+        execResolving({ _id: id, order: 1 }),
+      );
+
+      await expect(service.remove(storyId, id)).resolves.toBeUndefined();
+      expect(chapterModel.findOneAndDelete).toHaveBeenCalledWith({
+        _id: id,
+        storyId,
+      });
+      expect(storyService.removeChapter).toHaveBeenCalledWith(storyId, id);
+      expect(chapterModel.updateMany).toHaveBeenCalledWith(
+        { storyId, order: { $gt: 1 } },
+        { $inc: { order: -1 } },
+      );
+    });
+
+    it('throws a 404 and changes nothing else when the story has no such chapter', async () => {
+      chapterModel.findOneAndDelete.mockReturnValue(execResolving(null));
+
+      const error = await service.remove(storyId, id).catch((e: unknown) => e);
+
+      expect((error as AppException).getStatus()).toBe(404);
+      expect(storyService.removeChapter).not.toHaveBeenCalled();
+      expect(chapterModel.updateMany).not.toHaveBeenCalled();
     });
   });
 

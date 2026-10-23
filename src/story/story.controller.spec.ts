@@ -4,6 +4,7 @@ import { StoryController } from './story.controller.js';
 import { StoryService } from './story.service.js';
 import { Story } from './entities/story.entity.js';
 import { User } from '../user/entities/user.entity.js';
+import { Chapter } from '../chapter/entities/chapter.entity.js';
 
 describe('StoryController', () => {
   let controller: StoryController;
@@ -15,6 +16,7 @@ describe('StoryController', () => {
         StoryService,
         { provide: getModelToken(Story.name), useValue: {} },
         { provide: getModelToken(User.name), useValue: {} },
+        { provide: getModelToken(Chapter.name), useValue: {} },
       ],
     }).compile();
 

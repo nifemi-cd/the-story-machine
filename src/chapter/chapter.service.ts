@@ -11,7 +11,7 @@ import { Chapter, type ChapterDocument } from './entities/chapter.entity.js';
 
 /**
  * Business logic for a story's chapters: adding, listing, lookup, updates,
- * saving scripts and the reader view. Every lookup is scoped to the story in
+ * deleting, saving scripts and the reader view. Every lookup is scoped to the story in
  * the URL, so a chapter id from another story is a 404.
  */
 @Injectable()
@@ -113,6 +113,30 @@ export class ChapterService {
       await this.storyService.renameChapter(storyId, id, chapter.title);
     }
     return chapter;
+  }
+
+  /**
+   * Deletes the chapter for good and takes it out of the story's
+   * chapterOrder. Later chapters move up one place, so each chapter's order
+   * still matches its position in chapterOrder.
+   *
+   * @throws AppException 404 if the story has no chapter with this id
+   */
+  async remove(storyId: Types.ObjectId, id: Types.ObjectId): Promise<void> {
+    const chapter = await this.chapterModel
+      .findOneAndDelete({ _id: id, storyId })
+      .exec();
+    if (!chapter) {
+      throw AppException.notfound('Chapter not found');
+    }
+
+    await this.storyService.removeChapter(storyId, id);
+    await this.chapterModel
+      .updateMany(
+        { storyId, order: { $gt: chapter.order } },
+        { $inc: { order: -1 } },
+      )
+      .exec();
   }
 
   /**

@@ -4,6 +4,7 @@ import { Model, Types, type QueryFilter } from 'mongoose';
 import { AppException } from '../common/exceptions/app.exception.js';
 import type { PaginatedResult } from '../common/interfaces/api-response.interface.js';
 import { User } from '../user/entities/user.entity.js';
+import { Chapter } from '../chapter/entities/chapter.entity.js';
 import type { CharacterDto } from './dto/character.dto.js';
 import { CreateStoryDto } from './dto/create-story.dto.js';
 import { ListStoriesQueryDto } from './dto/list-stories-query.dto.js';
@@ -16,14 +17,15 @@ import {
 import { StoryStatus } from './enums/story-status.enum.js';
 
 /**
- * Business logic for stories: creating, listing, lookup and updates, plus
- * keeping each story's chapterOrder in step with its chapters.
+ * Business logic for stories: creating, listing, lookup, updates and
+ * deleting, plus keeping each story's chapterOrder in step with its chapters.
  */
 @Injectable()
 export class StoryService {
   constructor(
     @InjectModel(Story.name) private readonly storyModel: Model<Story>,
     @InjectModel(User.name) private readonly userModel: Model<User>,
+    @InjectModel(Chapter.name) private readonly chapterModel: Model<Chapter>,
   ) {}
 
   /**
@@ -138,6 +140,22 @@ export class StoryService {
       throw AppException.notfound('Story not found');
     }
     return story;
+  }
+
+  /**
+   * Deletes the story and all of its chapters, for good.
+   *
+   * The story goes first: if deleting the chapters then fails, they're left
+   * behind unlisted, rather than a story listing chapters that are gone.
+   *
+   * @throws AppException 404 if no story has this id
+   */
+  async remove(id: Types.ObjectId): Promise<void> {
+    const story = await this.storyModel.findByIdAndDelete(id).exec();
+    if (!story) {
+      throw AppException.notfound('Story not found');
+    }
+    await this.chapterModel.deleteMany({ storyId: id }).exec();
   }
 
   /**
