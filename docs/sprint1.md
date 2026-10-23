@@ -109,7 +109,7 @@ On GitHub Actions, each repository has a workflow called **CI**. It runs wheneve
 
 ## 4 API Documentation
 
-The backend API is documented with **Swagger**. Every route, request body, field rule and possible response is described there, with examples, and requests can be sent straight from the page.
+The backend API is documented with **Swagger**. Every route, request body, field rule and possible response is described there, with examples, and requests can be sent straight from the page. So this means the backend would need to be built to access the swagger documentation through a url. Steps listed below are the same steps to build and run the backend project
 
 ### Running it locally
 
