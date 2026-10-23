@@ -1,34 +1,59 @@
-import { ApiProperty } from '@nestjs/swagger';
+import {
+  ApiExtraModels,
+  ApiProperty,
+  getSchemaPath,
+  OmitType,
+} from '@nestjs/swagger';
+import { CharacterResponseDto } from '../../story/dto/story-response.dto.js';
 import { ScriptDto } from './script.dto.js';
 
-/** A chapter as the API returns it, for the Swagger docs. */
+/**
+ * A chapter as the API returns it, for the Swagger docs. This is the agreed
+ * story JSON contract, so its fields are snake_case.
+ */
+@ApiExtraModels(CharacterResponseDto)
 export class ChapterResponseDto {
   @ApiProperty({
-    description: 'Database id; use it in /story/:storyId/chapter/:id',
-    example: '6ad4306d3168a59d2918aeb1',
+    description: "The story's title",
+    example: 'The Lion at the Door',
   })
-  _id: string;
-
-  @ApiProperty({ example: '6ad4306d3168a59d2918aeb0' })
-  storyId: string;
-
-  @ApiProperty({ example: 'The Door in the Cellar' })
   title: string;
 
-  @ApiProperty({ description: 'Position in the story, from 0', example: 0 })
-  order: number;
+  @ApiProperty({
+    description: "The story author's username",
+    example: 'mock-author',
+  })
+  author: string;
+
+  @ApiProperty({ example: '6650f1c2a1b2c3d4e5f60718' })
+  story_id: string;
+
+  @ApiProperty({
+    description: 'Use it in /story/:storyId/chapter/:id',
+    example: '6650f1c2a1b2c3d4e5f60719',
+  })
+  chapter_id: string;
+
+  @ApiProperty({ example: 'Chapter 1' })
+  chapter_name: string;
+
+  @ApiProperty({
+    description: "The story's characters, keyed by name",
+    type: 'object',
+    additionalProperties: { $ref: getSchemaPath(CharacterResponseDto) },
+  })
+  characters: Record<string, CharacterResponseDto>;
 
   @ApiProperty({
     description:
-      'Parsed script for the reader; null until one is saved. Left out of chapter lists.',
+      "The chapter's script. Empty (no lines) until one has been saved.",
     type: ScriptDto,
-    nullable: true,
   })
-  script: ScriptDto | null;
-
-  @ApiProperty({ example: '2026-10-17T21:30:00.000Z' })
-  createdAt: Date;
-
-  @ApiProperty({ example: '2026-10-17T21:30:00.000Z' })
-  updatedAt: Date;
+  story: ScriptDto;
 }
+
+/** A chapter in a story's chapter list, without its script or the cast. */
+export class ChapterSummaryResponseDto extends OmitType(ChapterResponseDto, [
+  'characters',
+  'story',
+] as const) {}
