@@ -6,7 +6,8 @@ import { ApiErrorDoc, PaginationMetaDoc } from './api-response.docs.js';
  * Documents a successful response wrapped by the ResponseInterceptor:
  * `{ success: true, message, data }`, plus `meta` for paginated lists.
  *
- * @param model class describing what goes in `data`
+ * @param model class describing what goes in `data`, or null when `data` is
+ *   always null (e.g. after a delete)
  * @param options.status HTTP status, 200 by default
  * @param options.description shown next to the status, usually the @ResponseMessage
  * @param options.paginated true when `data` is a list with pagination `meta`
@@ -16,7 +17,7 @@ import { ApiErrorDoc, PaginationMetaDoc } from './api-response.docs.js';
  * @ApiEnvelope(UserResponseDto, { status: 201, description: 'User created' })
  */
 export function ApiEnvelope(
-  model: Type<unknown>,
+  model: Type<unknown> | null,
   options: {
     status?: number;
     description?: string;
@@ -31,15 +32,16 @@ export function ApiEnvelope(
     isArray = false,
   } = options;
 
-  // A single item, or a list of them
-  const data =
-    paginated || isArray
+  // Nothing, a single item, or a list of them
+  const data = !model
+    ? { type: 'object', nullable: true, example: null }
+    : paginated || isArray
       ? { type: 'array', items: { $ref: getSchemaPath(model) } }
       : { $ref: getSchemaPath(model) };
 
   return applyDecorators(
     // Registers the models so the $refs above resolve in the docs
-    ApiExtraModels(model, PaginationMetaDoc),
+    ApiExtraModels(...(model ? [model] : []), PaginationMetaDoc),
     ApiResponse({
       status,
       description,

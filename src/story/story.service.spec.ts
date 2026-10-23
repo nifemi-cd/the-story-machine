@@ -3,6 +3,7 @@ import { getModelToken } from '@nestjs/mongoose';
 import { Types } from 'mongoose';
 import { AppException } from '../common/exceptions/app.exception.js';
 import { User } from '../user/entities/user.entity.js';
+import { Chapter } from '../chapter/entities/chapter.entity.js';
 import { StoryService } from './story.service.js';
 import { Story } from './entities/story.entity.js';
 import { StoryStatus } from './enums/story-status.enum.js';
@@ -28,10 +29,12 @@ describe('StoryService', () => {
     countDocuments: vi.fn(),
     findById: vi.fn(),
     findByIdAndUpdate: vi.fn(),
+    findByIdAndDelete: vi.fn(),
     exists: vi.fn(),
     updateOne: vi.fn(),
   };
   const userModel = { exists: vi.fn(), findById: vi.fn() };
+  const chapterModel = { deleteMany: vi.fn() };
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -46,6 +49,7 @@ describe('StoryService', () => {
         StoryService,
         { provide: getModelToken(Story.name), useValue: storyModel },
         { provide: getModelToken(User.name), useValue: userModel },
+        { provide: getModelToken(Chapter.name), useValue: chapterModel },
       ],
     }).compile();
 
@@ -279,6 +283,31 @@ describe('StoryService', () => {
         .catch((e: unknown) => e);
 
       expect((error as AppException).getStatus()).toBe(404);
+    });
+  });
+
+  describe('remove', () => {
+    const id = new Types.ObjectId();
+
+    beforeEach(() => {
+      chapterModel.deleteMany.mockReturnValue(execResolving({}));
+    });
+
+    it('deletes the story, then its chapters', async () => {
+      storyModel.findByIdAndDelete.mockReturnValue(execResolving({ _id: id }));
+
+      await expect(service.remove(id)).resolves.toBeUndefined();
+      expect(storyModel.findByIdAndDelete).toHaveBeenCalledWith(id);
+      expect(chapterModel.deleteMany).toHaveBeenCalledWith({ storyId: id });
+    });
+
+    it('throws a 404 and deletes no chapters when the story does not exist', async () => {
+      storyModel.findByIdAndDelete.mockReturnValue(execResolving(null));
+
+      const error = await service.remove(id).catch((e: unknown) => e);
+
+      expect((error as AppException).getStatus()).toBe(404);
+      expect(chapterModel.deleteMany).not.toHaveBeenCalled();
     });
   });
 

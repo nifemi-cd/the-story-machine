@@ -1,5 +1,6 @@
 import {
   Controller,
+  Delete,
   Get,
   Post,
   Body,
@@ -95,5 +96,21 @@ export class StoryController {
     @Body() updateStoryDto: UpdateStoryDto,
   ) {
     return this.storyService.update(id, updateStoryDto);
+  }
+
+  /** DELETE /api/v1/story/:id: delete a story and its chapters for good. */
+  @Delete(':id')
+  @ResponseMessage('Story deleted')
+  @ApiOperation({
+    summary: 'Delete a story',
+    description:
+      'Permanently deletes the story and all of its chapters. This cannot be undone.',
+  })
+  @ApiObjectIdParam('Story')
+  @ApiEnvelope(null, { description: 'Story deleted' })
+  @ApiError(400, 'The id is not a valid 24-character hex string')
+  @ApiError(404, 'Story not found')
+  remove(@Param('id', ParseObjectIdPipe) id: Types.ObjectId) {
+    return this.storyService.remove(id);
   }
 }
