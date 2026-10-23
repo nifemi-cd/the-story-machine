@@ -38,7 +38,7 @@ Create a `.env` file in the project root based on `.env.example`, then set the
 values for your local environment:
 
 ```dotenv
-PORT=3000
+PORT=4563
 MONGO_URI=mongodb://localhost:27017/the-story-machine
 ```
 values for the current enviroment
