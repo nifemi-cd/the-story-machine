@@ -5,6 +5,7 @@ import { StoryController } from './story.controller.js';
 import { Story, StorySchema } from './entities/story.entity.js';
 import { User, UserSchema } from '../user/entities/user.entity.js';
 import { Chapter, ChapterSchema } from '../chapter/entities/chapter.entity.js';
+import { StorageModule } from '../storage/storage.module.js';
 
 /** Everything for stories: the routes, the service and the Story model. */
 @Module({
@@ -17,6 +18,8 @@ import { Chapter, ChapterSchema } from '../chapter/entities/chapter.entity.js';
       { name: User.name, schema: UserSchema },
       { name: Chapter.name, schema: ChapterSchema },
     ]),
+    // Stores each story's draft file in Azure Blob Storage
+    StorageModule,
   ],
   controllers: [StoryController],
   providers: [StoryService],

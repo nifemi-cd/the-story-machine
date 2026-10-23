@@ -5,6 +5,7 @@ import { AppException } from '../common/exceptions/app.exception.js';
 import type { PaginatedResult } from '../common/interfaces/api-response.interface.js';
 import { User } from '../user/entities/user.entity.js';
 import { Chapter } from '../chapter/entities/chapter.entity.js';
+import { StorageService } from '../storage/storage.service.js';
 import type { CharacterDto } from './dto/character.dto.js';
 import { CreateStoryDto } from './dto/create-story.dto.js';
 import { ListStoriesQueryDto } from './dto/list-stories-query.dto.js';
@@ -18,7 +19,8 @@ import { StoryStatus } from './enums/story-status.enum.js';
 
 /**
  * Business logic for stories: creating, listing, lookup, updates and
- * deleting, plus keeping each story's chapterOrder in step with its chapters.
+ * deleting, plus keeping each story's chapterOrder in step with its chapters
+ * and storing its draft file in Azure Blob Storage.
  */
 @Injectable()
 export class StoryService {
@@ -26,6 +28,7 @@ export class StoryService {
     @InjectModel(Story.name) private readonly storyModel: Model<Story>,
     @InjectModel(User.name) private readonly userModel: Model<User>,
     @InjectModel(Chapter.name) private readonly chapterModel: Model<Chapter>,
+    private readonly storage: StorageService,
   ) {}
 
   /**
@@ -143,9 +146,9 @@ export class StoryService {
   }
 
   /**
-   * Deletes the story and all of its chapters, for good.
+   * Deletes the story, all of its chapters and its draft file, for good.
    *
-   * The story goes first: if deleting the chapters then fails, they're left
+   * The story goes first: if deleting the rest then fails, it's left
    * behind unlisted, rather than a story listing chapters that are gone.
    *
    * @throws AppException 404 if no story has this id
@@ -156,6 +159,58 @@ export class StoryService {
       throw AppException.notfound('Story not found');
     }
     await this.chapterModel.deleteMany({ storyId: id }).exec();
+    await this.storage.delete(draftFileName(id));
+  }
+
+  /**
+   * Saves a plain text file as the story's draft, replacing any earlier one,
+   * and returns the story with draftUrl set.
+   *
+   * @throws AppException 400 if no file was sent or it isn't plain text
+   * @throws AppException 404 if no story has this id
+   */
+  async uploadFile(
+    id: Types.ObjectId,
+    file?: Express.Multer.File,
+  ): Promise<StoryDocument> {
+    if (!file || file.mimetype !== 'text/plain') {
+      throw AppException.badRequest('A .txt file is required', [
+        {
+          field: 'file',
+          message: 'file must be a plain text (.txt) file',
+          success: false,
+        },
+      ]);
+    }
+    // Check first, so no file is stored for a story that doesn't exist
+    await this.findStoryById(id);
+
+    const url = await this.storage.upload(
+      draftFileName(id),
+      file.buffer,
+      'text/plain; charset=utf-8',
+    );
+    const story = await this.storyModel
+      .findByIdAndUpdate(id, { draftUrl: url }, { returnDocument: 'after' })
+      .exec();
+    // Deleted while the file was uploading
+    if (!story) {
+      throw AppException.notfound('Story not found');
+    }
+    return story;
+  }
+
+  /**
+   * Returns the contents of the story's draft file.
+   *
+   * @throws AppException 404 if no story has this id, or it has no file yet
+   */
+  async getFile(id: Types.ObjectId): Promise<Buffer> {
+    const story = await this.findStoryById(id);
+    if (!story.draftUrl) {
+      throw AppException.notfound('This story has no file yet');
+    }
+    return await this.storage.download(draftFileName(id));
   }
 
   /**
@@ -271,6 +326,11 @@ function toCharacters(characters: CharacterDto[]): Character[] {
       })),
     };
   });
+}
+
+/** Where a story's draft file is kept in the storage container. */
+function draftFileName(id: Types.ObjectId): string {
+  return `drafts/${id.toString()}.txt`;
 }
 
 /** Drops keys whose value is undefined, so a PATCH only sets what was sent. */
