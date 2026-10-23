@@ -14,10 +14,45 @@ const execResolving = (value: unknown) => ({
   exec: () => Promise.resolve(value),
 });
 
+// Real documents, so toJSON behaves as it does with the database
+const StoryModel = model(Story.name, StorySchema);
+const ChapterModel = model(Chapter.name, ChapterSchema);
+
+// Plain request bodies stand in for ScriptDto; only their shape matters here
+const script = lionScript as unknown as ScriptDto;
+
 describe('ChapterService', () => {
   let service: ChapterService;
   const storyId = new Types.ObjectId();
   const id = new Types.ObjectId();
+  const story = new StoryModel({
+    _id: storyId,
+    authorId: new Types.ObjectId(),
+    title: 'The Lion at the Door',
+    characters: lionCharacters,
+  });
+
+  /** A saved chapter of the story, as the database would return it. */
+  const chapterDoc = (fields: object = {}) =>
+    new ChapterModel({
+      _id: id,
+      storyId,
+      title: 'Chapter 1',
+      order: 0,
+      ...fields,
+    });
+
+  /** The contract fields every response has, for this story and chapter. */
+  const summary = {
+    title: 'The Lion at the Door',
+    author: 'mock-author',
+    story_id: storyId.toString(),
+    chapter_id: id.toString(),
+    chapter_name: 'Chapter 1',
+  };
+  const characters = { Dave: lionCharacters[0], Cindy: lionCharacters[1] };
+  const emptyScript = { flags: {}, variables: [], lines: [] };
+
   // find() returns a chainable query; each step records its argument
   const query = {
     select: vi.fn(() => query),
@@ -36,16 +71,18 @@ describe('ChapterService', () => {
     addChapter: vi.fn(),
     removeChapter: vi.fn(),
     renameChapter: vi.fn(),
-    ensureExists: vi.fn(),
-    findOne: vi.fn(),
     findWithAuthorName: vi.fn(),
   };
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    storyService.findWithAuthorName.mockResolvedValue({
+      story,
+      author: 'mock-author',
+    });
     storyService.addChapter.mockResolvedValue(2);
     chapterModel.create.mockImplementation((doc: object) =>
-      Promise.resolve(doc),
+      Promise.resolve(new ChapterModel(doc)),
     );
 
     const module: TestingModule = await Test.createTestingModule({
@@ -59,36 +96,80 @@ describe('ChapterService', () => {
     service = module.get<ChapterService>(ChapterService);
   });
 
+  /** A service result as the client receives it, after JSON encoding. */
+  const asJson = (value: unknown): unknown => JSON.parse(JSON.stringify(value));
+
   describe('create', () => {
     it('adds the chapter to the story and saves it at that position', async () => {
-      await service.create(storyId, { title: 'The Cellar' });
+      await service.create(storyId, { chapter_name: 'Chapter 1' });
 
-      const [, chapterId, title] = storyService.addChapter.mock.calls[0] as [
-        Types.ObjectId,
-        Types.ObjectId,
-        string,
-      ];
-      expect(storyService.addChapter.mock.calls[0][0]).toBe(storyId);
-      expect(title).toBe('The Cellar');
+      const [sentStoryId, chapterId, title] = storyService.addChapter.mock
+        .calls[0] as [Types.ObjectId, Types.ObjectId, string];
+      expect(sentStoryId).toBe(storyId);
+      expect(title).toBe('Chapter 1');
       // The chapter is saved under the same id the story lists
       expect(chapterModel.create).toHaveBeenCalledWith({
         _id: chapterId,
         storyId,
         order: 2,
-        title: 'The Cellar',
+        title: 'Chapter 1',
+        script: null,
       });
     });
 
+    it('returns the contract shape with an empty story when none is sent', async () => {
+      const result = await service.create(storyId, {
+        chapter_name: 'Chapter 1',
+      });
+
+      expect(asJson(result)).toStrictEqual({
+        ...summary,
+        chapter_id: expect.any(String),
+        characters,
+        story: emptyScript,
+      });
+    });
+
+    it('saves a sent story and returns it', async () => {
+      const result = await service.create(storyId, {
+        chapter_name: 'Chapter 1',
+        story: script,
+      });
+
+      expect(chapterModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({ script: lionScript }),
+      );
+      expect(asJson(result)).toMatchObject({ story: lionScript });
+    });
+
+    it('rejects an invalid story with errors under story.', async () => {
+      const broken = structuredClone(script);
+      broken.lines[2].dialogue!.name = 'Bob';
+
+      const error = await service
+        .create(storyId, { chapter_name: 'Chapter 1', story: broken })
+        .catch((e: unknown) => e);
+
+      expect((error as AppException).getStatus()).toBe(400);
+      expect(error).toMatchObject({
+        message: 'Script is invalid',
+        errors: [{ field: 'story.lines.2.dialogue.name' }],
+      });
+      // Nothing is added to the story
+      expect(storyService.addChapter).not.toHaveBeenCalled();
+    });
+
     it('does not save the chapter when the story does not exist', async () => {
-      storyService.addChapter.mockRejectedValue(
+      storyService.findWithAuthorName.mockRejectedValue(
         AppException.notfound('Story not found'),
       );
 
       const error = await service
-        .create(storyId, { title: 'The Cellar' })
+        .create(storyId, { chapter_name: 'Chapter 1' })
         .catch((e: unknown) => e);
 
       expect((error as AppException).getStatus()).toBe(404);
+      expect(storyService.addChapter).not.toHaveBeenCalled();
       expect(chapterModel.create).not.toHaveBeenCalled();
     });
 
@@ -97,7 +178,7 @@ describe('ChapterService', () => {
       chapterModel.create.mockRejectedValue(dbError);
 
       await expect(
-        service.create(storyId, { title: 'The Cellar' }),
+        service.create(storyId, { chapter_name: 'Chapter 1' }),
       ).rejects.toBe(dbError);
 
       const chapterId = storyService.addChapter.mock.calls[0][1] as unknown;
@@ -109,19 +190,17 @@ describe('ChapterService', () => {
   });
 
   describe('findAll', () => {
-    it("returns the story's chapters in order without scripts", async () => {
-      const chapters = [{ title: 'One' }, { title: 'Two' }];
-      query.exec.mockResolvedValue(chapters);
+    it("returns the story's chapters in order, without story or characters", async () => {
+      query.exec.mockResolvedValue([chapterDoc()]);
 
-      await expect(service.findAll(storyId)).resolves.toBe(chapters);
-      expect(storyService.ensureExists).toHaveBeenCalledWith(storyId);
+      await expect(service.findAll(storyId)).resolves.toStrictEqual([summary]);
       expect(chapterModel.find).toHaveBeenCalledWith({ storyId });
       expect(query.select).toHaveBeenCalledWith('-script');
       expect(query.sort).toHaveBeenCalledWith({ order: 1 });
     });
 
     it('throws a 404 when the story does not exist', async () => {
-      storyService.ensureExists.mockRejectedValue(
+      storyService.findWithAuthorName.mockRejectedValue(
         AppException.notfound('Story not found'),
       );
 
@@ -133,12 +212,27 @@ describe('ChapterService', () => {
   });
 
   describe('findOne', () => {
-    it('looks the chapter up within the story', async () => {
-      const chapter = { _id: id, title: 'One' };
-      chapterModel.findOne.mockReturnValue(execResolving(chapter));
+    it('returns the chapter in the story JSON contract shape', async () => {
+      chapterModel.findOne.mockReturnValue(
+        execResolving(chapterDoc({ script: lionScript })),
+      );
 
-      await expect(service.findOne(storyId, id)).resolves.toBe(chapter);
+      const result = await service.findOne(storyId, id);
+
       expect(chapterModel.findOne).toHaveBeenCalledWith({ _id: id, storyId });
+      expect(asJson(result)).toStrictEqual({
+        ...summary,
+        characters,
+        story: lionScript,
+      });
+    });
+
+    it('gives a chapter without a script an empty one', async () => {
+      chapterModel.findOne.mockReturnValue(execResolving(chapterDoc()));
+
+      const result = await service.findOne(storyId, id);
+
+      expect(result.story).toEqual(emptyScript);
     });
 
     it('throws a 404 when the story has no such chapter', async () => {
@@ -151,13 +245,15 @@ describe('ChapterService', () => {
   });
 
   describe('update', () => {
-    it('updates the chapter and copies a new title into the story', async () => {
-      const updated = { _id: id, title: 'Renamed' };
-      chapterModel.findOneAndUpdate.mockReturnValue(execResolving(updated));
+    it('renames the chapter and copies the new name into the story', async () => {
+      chapterModel.findOneAndUpdate.mockReturnValue(
+        execResolving(chapterDoc({ title: 'Renamed' })),
+      );
 
-      await expect(
-        service.update(storyId, id, { title: 'Renamed' }),
-      ).resolves.toBe(updated);
+      const result = await service.update(storyId, id, {
+        chapter_name: 'Renamed',
+      });
+
       expect(chapterModel.findOneAndUpdate).toHaveBeenCalledWith(
         { _id: id, storyId },
         { title: 'Renamed' },
@@ -168,13 +264,17 @@ describe('ChapterService', () => {
         id,
         'Renamed',
       );
+      expect(result).toMatchObject({ chapter_name: 'Renamed' });
     });
 
-    it('leaves the story alone when the title is not changed', async () => {
-      chapterModel.findOneAndUpdate.mockReturnValue(execResolving({ _id: id }));
+    it('leaves the story alone when chapter_name is not sent', async () => {
+      chapterModel.findOneAndUpdate.mockReturnValue(
+        execResolving(chapterDoc()),
+      );
 
       await service.update(storyId, id, {});
 
+      expect(chapterModel.findOneAndUpdate.mock.calls[0][1]).toEqual({});
       expect(storyService.renameChapter).not.toHaveBeenCalled();
     });
 
@@ -182,7 +282,7 @@ describe('ChapterService', () => {
       chapterModel.findOneAndUpdate.mockReturnValue(execResolving(null));
 
       const error = await service
-        .update(storyId, id, { title: 'Renamed' })
+        .update(storyId, id, { chapter_name: 'Renamed' })
         .catch((e: unknown) => e);
 
       expect((error as AppException).getStatus()).toBe(404);
@@ -224,30 +324,34 @@ describe('ChapterService', () => {
   });
 
   describe('saveScript', () => {
-    // Plain request bodies stand in for ScriptDto; only their shape matters here
-    const script = lionScript as unknown as ScriptDto;
-
-    beforeEach(() => {
-      storyService.findOne.mockResolvedValue({ characters: lionCharacters });
-    });
-
-    it('checks the script against the story and saves it', async () => {
-      const saved = { _id: id };
-      chapterModel.findOneAndUpdate.mockReturnValue(execResolving(saved));
-
-      await expect(service.saveScript(storyId, id, script)).resolves.toBe(
-        saved,
+    it('checks the script against the story, saves it and returns the chapter', async () => {
+      chapterModel.findOneAndUpdate.mockReturnValue(
+        execResolving(chapterDoc({ script: lionScript })),
       );
-      expect(storyService.findOne).toHaveBeenCalledWith(storyId);
+
+      const result = await service.saveScript(storyId, id, script);
+
       expect(chapterModel.findOneAndUpdate).toHaveBeenCalledWith(
         { _id: id, storyId },
         { script: lionScript },
         { returnDocument: 'after', runValidators: true },
       );
+      expect(asJson(result)).toStrictEqual({
+        ...summary,
+        characters,
+        story: lionScript,
+      });
     });
 
     it('rejects a script that uses a character the story does not have', async () => {
-      storyService.findOne.mockResolvedValue({ characters: [] });
+      storyService.findWithAuthorName.mockResolvedValue({
+        story: new StoryModel({
+          _id: storyId,
+          authorId: story.authorId,
+          title: story.title,
+        }),
+        author: 'mock-author',
+      });
 
       const error = await service
         .saveScript(storyId, id, script)
@@ -256,6 +360,7 @@ describe('ChapterService', () => {
       expect((error as AppException).getStatus()).toBe(400);
       expect(error).toMatchObject({
         message: 'Script is invalid',
+        // The body is the script itself, so paths have no story. prefix
         errors: expect.arrayContaining([
           expect.objectContaining({ field: 'lines.2.dialogue.name' }),
         ]),
@@ -268,73 +373,6 @@ describe('ChapterService', () => {
 
       const error = await service
         .saveScript(storyId, id, script)
-        .catch((e: unknown) => e);
-
-      expect((error as AppException).getStatus()).toBe(404);
-    });
-  });
-
-  describe('findForReader', () => {
-    // Real documents, so toJSON behaves as it does with the database
-    const StoryModel = model(Story.name, StorySchema);
-    const ChapterModel = model(Chapter.name, ChapterSchema);
-    const story = new StoryModel({
-      _id: storyId,
-      authorId: new Types.ObjectId(),
-      title: 'The Lion at the Door',
-      characters: lionCharacters,
-    });
-
-    beforeEach(() => {
-      storyService.findWithAuthorName.mockResolvedValue({
-        story,
-        author: 'mock-author',
-      });
-    });
-
-    it('returns the chapter in the story JSON contract shape', async () => {
-      const chapter = new ChapterModel({
-        _id: id,
-        storyId,
-        title: 'Chapter 1',
-        order: 0,
-        script: lionScript,
-      });
-      chapterModel.findOne.mockReturnValue(execResolving(chapter));
-
-      const result = await service.findForReader(storyId, id);
-
-      expect(JSON.parse(JSON.stringify(result))).toStrictEqual({
-        title: 'The Lion at the Door',
-        author: 'mock-author',
-        story_id: storyId.toString(),
-        chapter_id: id.toString(),
-        chapter_name: 'Chapter 1',
-        characters: {
-          Dave: lionCharacters[0],
-          Cindy: lionCharacters[1],
-        },
-        story: lionScript,
-      });
-    });
-
-    it('gives a chapter without a script an empty one', async () => {
-      chapterModel.findOne.mockReturnValue(
-        execResolving(
-          new ChapterModel({ _id: id, storyId, title: 'Draft', order: 0 }),
-        ),
-      );
-
-      const result = await service.findForReader(storyId, id);
-
-      expect(result.story).toEqual({ flags: {}, variables: [], lines: [] });
-    });
-
-    it('throws a 404 when the story has no such chapter', async () => {
-      chapterModel.findOne.mockReturnValue(execResolving(null));
-
-      const error = await service
-        .findForReader(storyId, id)
         .catch((e: unknown) => e);
 
       expect((error as AppException).getStatus()).toBe(404);

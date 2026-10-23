@@ -13,8 +13,10 @@ import { Types } from 'mongoose';
 import { ChapterService } from './chapter.service.js';
 import { CreateChapterDto } from './dto/create-chapter.dto.js';
 import { UpdateChapterDto } from './dto/update-chapter.dto.js';
-import { ChapterResponseDto } from './dto/chapter-response.dto.js';
-import { ReaderChapterResponseDto } from './dto/reader-chapter-response.dto.js';
+import {
+  ChapterResponseDto,
+  ChapterSummaryResponseDto,
+} from './dto/chapter-response.dto.js';
 import { ScriptDto } from './dto/script.dto.js';
 import { ResponseMessage } from '../common/decorators/response-message.decorator.js';
 import { ParseObjectIdPipe } from '../common/pipes/parse-object-id.pipe.js';
@@ -44,13 +46,16 @@ export class ChapterController {
   @ApiOperation({
     summary: 'Add a chapter',
     description:
-      "Adds the chapter to the end of the story's chapterOrder. Its script starts as null.",
+      "Adds the chapter to the end of the story's chapterOrder. Send its script as story now, or later through PUT .../script; it is checked the same way.",
   })
   @ApiEnvelope(ChapterResponseDto, {
     status: 201,
     description: 'Chapter created',
   })
-  @ApiError(400, 'Invalid storyId, or a field failed validation')
+  @ApiError(
+    400,
+    'Invalid storyId, a field failed validation, or the script is invalid',
+  )
   @ApiError(404, 'Story not found')
   create(
     @Param('storyId', ParseObjectIdPipe) storyId: Types.ObjectId,
@@ -64,9 +69,10 @@ export class ChapterController {
   @ResponseMessage('Chapters fetched')
   @ApiOperation({
     summary: "List a story's chapters",
-    description: 'In reading order. Scripts are left out.',
+    description:
+      "In reading order. Each chapter's story and the characters are left out; get a single chapter for those.",
   })
-  @ApiEnvelope(ChapterResponseDto, {
+  @ApiEnvelope(ChapterSummaryResponseDto, {
     description: 'Chapters fetched',
     isArray: true,
   })
@@ -76,10 +82,14 @@ export class ChapterController {
     return this.chapterService.findAll(storyId);
   }
 
-  /** GET /api/v1/story/:storyId/chapter/:id: get one chapter with its script. */
+  /** GET /api/v1/story/:storyId/chapter/:id: get one chapter, ready for the reader. */
   @Get(':id')
   @ResponseMessage('Chapter fetched')
-  @ApiOperation({ summary: 'Get a chapter by id' })
+  @ApiOperation({
+    summary: 'Get a chapter by id',
+    description:
+      "The story JSON contract: the story's title, author and characters around this chapter's script.",
+  })
   @ApiObjectIdParam('Chapter')
   @ApiEnvelope(ChapterResponseDto, { description: 'Chapter fetched' })
   @ApiError(400, 'Invalid storyId or id')
@@ -148,26 +158,5 @@ export class ChapterController {
     @Body() scriptDto: ScriptDto,
   ) {
     return this.chapterService.saveScript(storyId, id, scriptDto);
-  }
-
-  /** GET /api/v1/story/:storyId/chapter/:id/read: the chapter as the reader plays it. */
-  @Get(':id/read')
-  @ResponseMessage('Chapter fetched for reading')
-  @ApiOperation({
-    summary: 'Get a chapter for the reader',
-    description:
-      "The story JSON contract: the story's title, author and characters around this chapter's script.",
-  })
-  @ApiObjectIdParam('Chapter')
-  @ApiEnvelope(ReaderChapterResponseDto, {
-    description: 'Chapter fetched for reading',
-  })
-  @ApiError(400, 'Invalid storyId or id')
-  @ApiError(404, 'Chapter not found in this story')
-  findForReader(
-    @Param('storyId', ParseObjectIdPipe) storyId: Types.ObjectId,
-    @Param('id', ParseObjectIdPipe) id: Types.ObjectId,
-  ) {
-    return this.chapterService.findForReader(storyId, id);
   }
 }
