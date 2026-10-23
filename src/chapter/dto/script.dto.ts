@@ -15,12 +15,10 @@ import {
   ValidateNested,
 } from 'class-validator';
 
-// These classes check the shape of a script sent by the frontend's parser.
-// Rules that need the whole script or the story (exactly one kind per line,
-// jumps that land on real lines, known characters) are in check-script.ts.
-// They also describe the script in the Swagger docs.
+// These only check the shape of the script the frontend parser sends.
+// Anything that needs the whole script or the story (like a goto_line
+// pointing at a real line) is checked in check-script.ts instead.
 
-/** `text` of a dialogue or prose line. */
 export class ScriptTextDto {
   @ApiProperty({ type: [String], example: ['We', 'made', 'it.'] })
   @IsArray()
@@ -30,7 +28,6 @@ export class ScriptTextDto {
   words: string[];
 }
 
-/** A `dialogue` line. */
 export class DialogueLineDto {
   @ApiProperty({ description: 'One of the story characters', example: 'Dave' })
   @IsString()
@@ -57,13 +54,12 @@ export class DialogueLineDto {
     nullable: true,
     example: null,
   })
-  // IsOptional lets null and undefined through, so anything else fails Equals
+  // IsOptional lets null through, anything else gets caught by Equals(null)
   @IsOptional()
   @Equals(null)
   text_color?: null;
 }
 
-/** A `prose` line. */
 export class ProseLineDto {
   @ApiProperty({ type: ScriptTextDto })
   @ValidateNested()
@@ -81,7 +77,6 @@ export class ProseLineDto {
   text_color?: null;
 }
 
-/** One option of a `choice` line. */
 export class ChoiceOptionDto {
   @ApiProperty({ description: 'line_id to jump to', example: 8 })
   @IsInt()
@@ -96,7 +91,7 @@ export class ChoiceOptionDto {
 
   @ApiPropertyOptional({
     description: 'Not used yet; must be null',
-    // Swagger can't infer a type from `null`, so name one
+    // swagger can't work out a type from null so we have to give it one
     type: 'object',
     additionalProperties: true,
     nullable: true,
@@ -107,9 +102,7 @@ export class ChoiceOptionDto {
   condition?: null;
 }
 
-/**
- * One entry in `lines`. Exactly one of the optional fields must be set.
- */
+// each line should only have one of these set, check-script.ts enforces that
 export class ScriptLineDto {
   @ApiProperty({ description: 'Position in lines, from 0', example: 0 })
   @IsInt()
@@ -159,10 +152,7 @@ export class ScriptLineDto {
   end?: true;
 }
 
-/**
- * Body of PUT /api/v1/story/:storyId/chapter/:id/script: the `story` object
- * of the story JSON contract, as the frontend's parser produces it.
- */
+// the "story" object from the story JSON contract
 export class ScriptDto {
   @ApiPropertyOptional({
     description: 'Bookmarks: flag name to the line it marks',
@@ -174,7 +164,7 @@ export class ScriptDto {
     },
     example: { Morning: { line_id: 15 } },
   })
-  // Keys are free-form, so each entry is checked in check-script.ts
+  // flag names can be anything so the decorators can't check them, check-script.ts does
   @IsOptional()
   @IsObject()
   flags?: Record<string, { line_id: number }>;

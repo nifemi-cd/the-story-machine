@@ -6,7 +6,7 @@ import {
 import { AppException } from '../exceptions/app.exception.js';
 import { AllExceptionsFilter } from './all-exceptions.filter.js';
 
-/** A fake HTTP request/response pair that records what the filter sends back. */
+// fake request/response so we can see what the filter sends
 function httpHost() {
   const json = vi.fn();
   const status = vi.fn(() => ({ json }));

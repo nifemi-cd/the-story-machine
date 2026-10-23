@@ -1,11 +1,10 @@
-// The examples from the team's story JSON contract docs, used by tests to
-// check that what was agreed is accepted and comes back unchanged.
+// examples copied from our story JSON contract docs, so tests can check
+// the format we agreed on actually works
 
 const words = (text: string) => text.split(' ');
 const emotions = (...names: string[]) =>
   names.map((emotion) => ({ emotion, portrait_x: null, portrait_y: null }));
 
-/** Characters of "The Lion at the Door" (story-json.md), as stored. */
 export const lionCharacters = [
   {
     name: 'Dave',
@@ -26,7 +25,7 @@ const prose = (text: string) => ({
   prose: { text: { words: words(text) }, text_color: null },
 });
 
-/** The `story` object of "The Lion at the Door" (story-json.md section 4). */
+// the full example from section 4 of story-json.md
 export const lionScript = {
   flags: {
     'Face the lion': { line_id: 8 },
@@ -61,10 +60,8 @@ export const lionScript = {
   ].map((line, line_id) => ({ line_id, ...line })),
 };
 
-/**
- * The `story` object of the sprint-1 Team Beluga example, exactly as that
- * doc wrote it: dialogue without portrait or text_color.
- */
+// the sprint 1 example, left exactly how it was written in the doc
+// (no portrait or text_color on the dialogue)
 export const belugaScript = {
   flags: {
     end_of_presentation: { line_id: 5 },
@@ -176,7 +173,6 @@ export const belugaScript = {
   ].map((line, line_id) => ({ line_id, ...line })),
 };
 
-/** The Team Beluga cast: every speaker, with only the default emotion. */
 export const belugaCharacters = [
   'Arthur',
   'Paul',

@@ -1,42 +1,36 @@
-/** Pagination details sent alongside a page of results. */
 export interface PaginationMeta {
   page: number;
   limit: number;
-  // Number of items across all pages
+  // across all pages, not just this one
   total: number;
   totalPages: number;
 }
 
-/**
- * What services return from list endpoints. The response interceptor
- * sends `items` as `data` and moves `meta` to the top level of the response.
- */
+// services return this for lists and the response interceptor turns
+// items into data and puts meta at the top level
 export interface PaginatedResult<T> {
   items: T[];
   meta: PaginationMeta;
 }
 
-/** Body of every successful response. */
 export interface ApiSuccessResponse<T> {
   success: boolean;
   message: string;
   data: T;
-  // Only present on paginated lists
+  // only on paginated lists
   meta?: PaginationMeta;
 }
 
-/** One problem with the request, usually tied to a field. */
 export interface FieldError {
   success: boolean;
-  // The request field that failed, e.g. "email"; dotted for nested fields
+  // nested fields use dots, like characters.0.name
   field?: string;
   message: string;
 }
 
-/** Body of every error response. */
 export interface ApiErrorResponse {
   success: boolean;
   message: string;
-  // Only present when specific fields were wrong
+  // left out when the error isn't about specific fields
   errors?: FieldError[];
 }

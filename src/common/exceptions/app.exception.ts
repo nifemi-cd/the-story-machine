@@ -4,15 +4,10 @@ import type {
   FieldError,
 } from '../interfaces/api-response.interface.js';
 
-/**
- * An HTTP error that can also say which request fields were wrong.
- * The exception filter turns it into `{ success: false, message, errors? }`.
- *
- * For errors without field details, Nest's built-in exceptions
- * (NotFoundException etc.) work as well.
- */
+// Nest's built in exceptions only have a message. This one can also carry a
+// list of which fields were wrong, which the frontend uses to show errors
+// next to the right inputs.
 export class AppException extends HttpException {
-  // Per-field problems, e.g. [{ field: 'email', message: 'email must be an email' }]
   readonly errors?: FieldError[];
 
   constructor(status: HttpStatus, message: string, errors?: FieldError[]) {
@@ -21,22 +16,23 @@ export class AppException extends HttpException {
     this.errors = errors;
   }
 
-  /** 400: the request is malformed, e.g. an invalid id in the URL. */
+  // returns a 400 error
   static badRequest(message: string, errors?: FieldError[]) {
     return new AppException(HttpStatus.BAD_REQUEST, message, errors);
   }
 
-  /** 400: the body or query failed DTO validation (used by the ValidationPipe). */
+  // returns a 400 error for failed validation
+  // used by the ValidationPipe when a DTO check fails
   static validation(errors: FieldError[], message = 'Validation failed') {
     return new AppException(HttpStatus.BAD_REQUEST, message, errors);
   }
 
-  /** 409: the request clashes with existing data, e.g. a taken username. */
+  // returns a 409 error
   static conflict(message: string, errors?: FieldError[]) {
     return new AppException(HttpStatus.CONFLICT, message, errors);
   }
 
-  /** 404: the requested resource doesn't exist. */
+  // returns a 404 error
   static notfound(message: string, error?: FieldError[]) {
     return new AppException(HttpStatus.NOT_FOUND, message, error);
   }

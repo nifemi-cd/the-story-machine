@@ -1,32 +1,32 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
-import { VersioningType } from '@nestjs/common';
+import { configureApp } from './app.setup.js';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { Logger } from 'nestjs-pino';
+import { ApiErrorDoc } from './common/swagger/api-response.docs.js';
 
-/**
- * Creates the Nest app, applies HTTP-level settings (URL prefix, versioning,
- * docs, security headers, CORS, logging) and starts listening.
- */
+// creates the app, sets it up and starts the server
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
-    // Hold startup logs until the pino logger below is attached
+    // hold the startup logs until pino is set up below, otherwise they print in nest's format
     bufferLogs: true,
   });
 
-  // Every route starts with /api/v1, e.g. /api/v1/user
-  app.setGlobalPrefix('api');
-  app.enableVersioning({
-    type: VersioningType.URI,
-    defaultVersion: '1',
-  });
+  // in its own file so the e2e tests can use the same /api/v1 setup
+  configureApp(app);
 
-  // API docs at /api/docs (validation, response format and errors are
-  // registered globally in AppModule)
+  // swagger docs at /api/docs
   const swaggerConfig = new DocumentBuilder()
     .setTitle('The Story Machine API')
     .setVersion('1')
+    // any route can crash so the 500 is added to all of them here instead of one by one
+    .addGlobalResponse({
+      status: 500,
+      description: 'Unexpected server error',
+      type: ApiErrorDoc,
+      example: { success: false, message: 'Internal server error' },
+    })
     .build();
   SwaggerModule.setup(
     'api/docs',
@@ -34,14 +34,12 @@ async function bootstrap() {
     SwaggerModule.createDocument(app, swaggerConfig),
   );
 
-  // Enable Helmet security headers
   app.use(helmet());
 
-  // Route Nest's own logs through pino so everything uses one format
+  // so nest's own logs use pino too and everything looks the same
   const logger = app.get(Logger);
   app.useLogger(logger);
 
-  // Enable CORS
   app.enableCors({
     origin: '*',
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],

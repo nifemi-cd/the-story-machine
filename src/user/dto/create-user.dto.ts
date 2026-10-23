@@ -12,19 +12,14 @@ import {
   MaxLength,
 } from 'class-validator';
 
-// Trim before validation so " a@b.com " is accepted rather than rejected
+// trim first so " a@b.com " still passes
 const trim = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() : value;
 
-/**
- * Body of POST /api/v1/user (sign-up). Any field not listed here is
- * rejected, so clients can't set things like `roles` themselves.
- *
- * @ApiProperty decorators only feed the Swagger docs at /api/docs; the
- * class-validator decorators below them do the actual validation.
- */
+// the @ApiProperty ones are just for swagger, the class-validator ones
+// underneath are what actually validate
 export class CreateUserDto {
-  // Lowercased so the same address can't register twice with different casing
+  // lowercased so you can't sign up twice with the same email in different case
   @ApiProperty({
     description: 'Trimmed and lowercased before saving',
     example: 'ada.reader@example.com',
@@ -38,7 +33,6 @@ export class CreateUserDto {
   @MaxLength(254)
   email: string;
 
-  // Letters, numbers and underscores only
   @ApiProperty({
     description:
       'Letters, numbers and underscores. Must be unique, ignoring letter case.',
@@ -55,8 +49,7 @@ export class CreateUserDto {
   })
   username: string;
 
-  // Plain-text password; the service hashes it into passwordHash.
-  // Must have 8+ characters with an uppercase, lowercase, number and symbol.
+  // plain password here, the service hashes it before saving
   @ApiProperty({
     description:
       'At least 8 characters (max 72 bytes) with an uppercase letter, a lowercase letter, a number and a symbol. Never returned.',
@@ -72,11 +65,11 @@ export class CreateUserDto {
     minSymbols: 1,
     minUppercase: 1,
   })
-  // bcrypt ignores everything after 72 bytes (not characters)
+  // bcrypt only looks at the first 72 bytes, and emojis etc take more than one byte each
   @IsByteLength(0, 72, { message: 'password must be at most 72 bytes' })
   password: string;
 
-  // Defaults to the username when not given
+  // the service uses the username if this isn't sent
   @ApiPropertyOptional({
     description: 'Name shown on profiles. Defaults to the username.',
     example: 'Ada Lovelace',
@@ -89,7 +82,6 @@ export class CreateUserDto {
   @MaxLength(50)
   displayName?: string;
 
-  // Short "about me" text; can be empty
   @ApiPropertyOptional({
     description: 'Short "about me" text',
     example: 'I read mysteries and write branching sci-fi.',
@@ -100,7 +92,6 @@ export class CreateUserDto {
   @MaxLength(500)
   bio?: string;
 
-  // Link to the user's own site or social profile (http/https)
   @ApiPropertyOptional({
     description: "Link to the user's own site or social profile",
     example: 'https://example.com/ada',

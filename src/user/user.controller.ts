@@ -22,19 +22,12 @@ import {
 } from '../common/swagger/api-response.decorators.js';
 import { ApiObjectIdParam } from '../common/swagger/api-param.decorators.js';
 
-/**
- * User routes under /api/v1/user. Request bodies are validated against
- * their DTOs before these methods run, and responses are wrapped in
- * `{ success, message, data }` by the ResponseInterceptor.
- *
- * The @Api* decorators only describe the routes for the docs at /api/docs.
- */
 @ApiTags('Users')
 @Controller({ path: 'user', version: '1' })
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
-  /** POST /api/v1/user: register a new user. */
+  // signs up a new user and returns them
   @Post()
   @ResponseMessage('User created')
   @ApiOperation({
@@ -49,7 +42,7 @@ export class UserController {
     return this.userService.create(createUserDto);
   }
 
-  /** GET /api/v1/user?page=1&limit=20: list users one page at a time. */
+  // returns one page of users
   @Get()
   @ResponseMessage('Users fetched')
   @ApiOperation({ summary: 'List users', description: 'Newest users first.' })
@@ -62,7 +55,7 @@ export class UserController {
     return this.userService.findAll(query);
   }
 
-  /** GET /api/v1/user/:id: get one user. */
+  // returns one user
   @Get(':id')
   @ResponseMessage('User fetched')
   @ApiOperation({ summary: 'Get a user by id' })
@@ -74,7 +67,7 @@ export class UserController {
     return this.userService.findOne(id);
   }
 
-  /** PATCH /api/v1/user/:id: change some of a user's profile fields. */
+  // updates a user's profile and returns the updated user
   @Patch(':id')
   @ResponseMessage('User updated')
   @ApiOperation({

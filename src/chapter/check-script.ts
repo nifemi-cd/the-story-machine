@@ -3,7 +3,6 @@ import type { Character } from '../story/entities/story.entity.js';
 import type { ScriptDto, ScriptLineDto } from './dto/script.dto.js';
 import type { ScriptLine } from './entities/script.entity.js';
 
-// The kinds of line; each line in a script has exactly one of these
 const LINE_KINDS = [
   'dialogue',
   'prose',
@@ -13,23 +12,18 @@ const LINE_KINDS = [
   'end',
 ] as const;
 
-/** The kinds a line actually sets (null counts as not set). */
+// returns which kinds this line has set
+// != null so that both null and undefined count as not set
 function kindsOf(line: ScriptLineDto) {
   return LINE_KINDS.filter((kind) => line[kind] != null);
 }
 
-/**
- * Checks the rules a single field's validator can't: that each line has
- * exactly one kind, line ids match positions, every jump and flag lands on
- * a real line, and dialogue only uses the story's characters and emotions.
- * Runs after the ScriptDto shape has been validated.
- *
- * Field paths match the ValidationPipe's, e.g. "lines.7.choice.1.goto_line".
- *
- * @param script the validated request body
- * @param characters the story's characters
- * @returns one FieldError per problem; empty when the script is fine
- */
+// returns a list of problems with the script, empty if it's fine
+// The DTO decorators can only check one field at a time. This checks the
+// stuff that needs the whole script or the story, like jumps landing on real
+// lines and dialogue only using characters that exist. Field names are built
+// the same way the ValidationPipe does it (lines.7.choice.1.goto_line) so
+// the frontend gets one consistent error format.
 export function checkScript(
   script: ScriptDto,
   characters: Character[],
@@ -59,7 +53,7 @@ export function checkScript(
       if (!isLine(line.goto_line)) {
         fail(`${at}.goto_line`, 'goto_line must point to a line in lines');
       } else if (line.goto_line === i) {
-        // The reader would jump to the same line forever
+        // the reader would get stuck jumping to the same line forever
         fail(`${at}.goto_line`, 'goto_line cannot point to its own line');
       }
     }
@@ -92,7 +86,7 @@ export function checkScript(
 
   for (const [name, flag] of Object.entries(script.flags ?? {})) {
     const at = `flags.${name}`;
-    // Flags are stored as a Mongoose Map, whose keys can't contain these
+    // flags get saved as a mongoose Map and Map keys can't have these
     if (name.includes('.') || name.startsWith('$')) {
       fail(at, 'flag names cannot contain "." or start with "$"');
     }
@@ -112,11 +106,9 @@ export function checkScript(
   return errors;
 }
 
-/**
- * Turns a checked script into what's stored: each line keeps only its one
- * kind, and placeholders the client left out are filled in (portrait
- * "default", text_color and condition null, variables []).
- */
+// returns the script in the shape we save to the database
+// Only call this after checkScript passes. It strips each line down to its
+// one kind and fills in the placeholder fields the parser can leave out.
 export function toStoredScript(script: ScriptDto) {
   const lines = script.lines.map((line): ScriptLine => {
     const { line_id } = line;

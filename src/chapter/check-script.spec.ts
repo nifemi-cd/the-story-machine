@@ -12,10 +12,7 @@ import { checkScript, toStoredScript } from './check-script.js';
 import { ScriptDto } from './dto/script.dto.js';
 import { Chapter, ChapterSchema } from './entities/chapter.entity.js';
 
-/**
- * Runs a request body through ScriptDto the way the ValidationPipe does and
- * returns the converted DTO plus the paths of the fields that failed.
- */
+// does the same thing the ValidationPipe does and returns which fields failed
 async function parse(input: object) {
   const dto = plainToInstance(ScriptDto, input);
   const errors = await validate(dto, {
@@ -25,13 +22,9 @@ async function parse(input: object) {
   return { dto, fields: toFieldErrors(errors).map((e) => e.field) };
 }
 
-/**
- * A deep copy of a fixture, safe to change in one test. Typed as a ScriptDto
- * so any line can be given any kind.
- */
+// copy so changing it in one test doesn't affect the others
 const copy = (value: object) => structuredClone(value) as ScriptDto;
 
-/** The fields checkScript reports for a script that passes the DTO. */
 async function problems(input: object, characters = lionCharacters) {
   const { dto, fields } = await parse(input);
   expect(fields).toEqual([]);
@@ -181,7 +174,7 @@ describe('toStoredScript', () => {
     });
 
     await expect(chapter.validate()).resolves.toBeUndefined();
-    // Strict equality: no extra fields like `choice: []` or `_id` on lines
+    // toStrictEqual so it fails if mongoose sneaks in an empty choice array or an _id
     expect(JSON.parse(JSON.stringify(chapter)).script).toStrictEqual(
       lionScript,
     );

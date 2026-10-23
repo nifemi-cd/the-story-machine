@@ -1,7 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { StoryStatus } from '../enums/story-status.enum.js';
 
-/** One entry in a story's table of contents, for the Swagger docs. */
+// these response classes are only used for the swagger docs
+
 export class ChapterRefResponseDto {
   @ApiProperty({ example: '6ad4306d3168a59d2918aeb1' })
   chapterId: string;
@@ -10,7 +11,6 @@ export class ChapterRefResponseDto {
   title: string;
 }
 
-/** One of a character's emotions, for the Swagger docs. */
 export class EmotionResponseDto {
   @ApiProperty({ example: 'default' })
   emotion: string;
@@ -32,7 +32,6 @@ export class EmotionResponseDto {
   portrait_y: number | null;
 }
 
-/** A character in the story, for the Swagger docs. */
 export class CharacterResponseDto {
   @ApiProperty({ example: 'Dave' })
   name: string;
@@ -47,7 +46,6 @@ export class CharacterResponseDto {
   emotions: EmotionResponseDto[];
 }
 
-/** A story as the API returns it, for the Swagger docs. */
 export class StoryResponseDto {
   @ApiProperty({
     description: 'Database id; use it in /story/:id',

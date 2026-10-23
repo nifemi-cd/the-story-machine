@@ -7,10 +7,7 @@ import {
 import { CharacterResponseDto } from '../../story/dto/story-response.dto.js';
 import { ScriptDto } from './script.dto.js';
 
-/**
- * A chapter as the API returns it, for the Swagger docs. This is the agreed
- * story JSON contract, so its fields are snake_case.
- */
+// only for the swagger docs. snake_case because it follows the story JSON contract
 @ApiExtraModels(CharacterResponseDto)
 export class ChapterResponseDto {
   @ApiProperty({
@@ -52,7 +49,7 @@ export class ChapterResponseDto {
   story: ScriptDto;
 }
 
-/** A chapter in a story's chapter list, without its script or the cast. */
+// the list route leaves out the script and characters
 export class ChapterSummaryResponseDto extends OmitType(ChapterResponseDto, [
   'characters',
   'story',

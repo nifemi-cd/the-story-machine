@@ -9,16 +9,16 @@ import { ChapterService } from './chapter.service.js';
 import type { ScriptDto } from './dto/script.dto.js';
 import { Chapter, ChapterSchema } from './entities/chapter.entity.js';
 
-/** Wraps a value the way Mongoose queries return it from .exec(). */
+// mongoose queries are awaited through .exec() so the mocks need it too
 const execResolving = (value: unknown) => ({
   exec: () => Promise.resolve(value),
 });
 
-// Real documents, so toJSON behaves as it does with the database
+// real documents so toJSON works like it does with the actual database
 const StoryModel = model(Story.name, StorySchema);
 const ChapterModel = model(Chapter.name, ChapterSchema);
 
-// Plain request bodies stand in for ScriptDto; only their shape matters here
+// plain objects are fine here instead of real ScriptDto instances
 const script = lionScript as unknown as ScriptDto;
 
 describe('ChapterService', () => {
@@ -32,7 +32,6 @@ describe('ChapterService', () => {
     characters: lionCharacters,
   });
 
-  /** A saved chapter of the story, as the database would return it. */
   const chapterDoc = (fields: object = {}) =>
     new ChapterModel({
       _id: id,
@@ -42,7 +41,6 @@ describe('ChapterService', () => {
       ...fields,
     });
 
-  /** The contract fields every response has, for this story and chapter. */
   const summary = {
     title: 'The Lion at the Door',
     author: 'mock-author',
@@ -53,7 +51,7 @@ describe('ChapterService', () => {
   const characters = { Dave: lionCharacters[0], Cindy: lionCharacters[1] };
   const emptyScript = { flags: {}, variables: [], lines: [] };
 
-  // find() returns a chainable query; each step records its argument
+  // find() is chained (sort, skip, limit) so each step returns the same mock
   const query = {
     select: vi.fn(() => query),
     sort: vi.fn(() => query),
@@ -96,7 +94,7 @@ describe('ChapterService', () => {
     service = module.get<ChapterService>(ChapterService);
   });
 
-  /** A service result as the client receives it, after JSON encoding. */
+  // what the client would actually get after JSON.stringify
   const asJson = (value: unknown): unknown => JSON.parse(JSON.stringify(value));
 
   describe('create', () => {
@@ -107,7 +105,7 @@ describe('ChapterService', () => {
         .calls[0] as [Types.ObjectId, Types.ObjectId, string];
       expect(sentStoryId).toBe(storyId);
       expect(title).toBe('Chapter 1');
-      // The chapter is saved under the same id the story lists
+      // should be saved with the same id that got added to chapterOrder
       expect(chapterModel.create).toHaveBeenCalledWith({
         _id: chapterId,
         storyId,
@@ -155,7 +153,6 @@ describe('ChapterService', () => {
         message: 'Script is invalid',
         errors: [{ field: 'story.lines.2.dialogue.name' }],
       });
-      // Nothing is added to the story
       expect(storyService.addChapter).not.toHaveBeenCalled();
     });
 
@@ -360,7 +357,7 @@ describe('ChapterService', () => {
       expect((error as AppException).getStatus()).toBe(400);
       expect(error).toMatchObject({
         message: 'Script is invalid',
-        // The body is the script itself, so paths have no story. prefix
+        // here the body is the script itself so there's no "story." in front
         errors: expect.arrayContaining([
           expect.objectContaining({ field: 'lines.2.dialogue.name' }),
         ]),

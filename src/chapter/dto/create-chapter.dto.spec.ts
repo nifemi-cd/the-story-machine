@@ -5,10 +5,7 @@ import { toFieldErrors } from '../../common/pipes/validation.pipe.js';
 import { CreateChapterDto } from './create-chapter.dto.js';
 import { UpdateChapterDto } from './update-chapter.dto.js';
 
-/**
- * Runs a request body through a DTO the way the ValidationPipe does and
- * returns the converted DTO plus the paths of the fields that failed.
- */
+// does the same thing the ValidationPipe does and returns which fields failed
 async function errorsFor<T extends object>(cls: new () => T, input: object) {
   const dto = plainToInstance(cls, input);
   const errors = await validate(dto, {
@@ -59,7 +56,7 @@ describe('CreateChapterDto', () => {
     expect((await errorsFor(CreateChapterDto, input)).fields).toContain(field);
   });
 
-  // The server fills these in, so clients can't set them
+  // these come from the server so the client shouldn't be able to send them
   it.each(['title', 'author', 'story_id', 'chapter_id'])(
     'does not let clients set %s',
     async (field) => {

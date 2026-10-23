@@ -1,10 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { UserRole } from '../enums/user-role.enum.js';
 
-/**
- * A user as the API returns it, for the Swagger docs. passwordHash and
- * tokenVersion are never included (the schema's toJSON removes them).
- */
+// for swagger only. no passwordHash here since toJSON in the schema strips it
 export class UserResponseDto {
   @ApiProperty({
     description: 'Database id; use it in /user/:id',

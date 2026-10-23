@@ -9,10 +9,7 @@ const valid = {
   title: 'The Lighthouse Keeper',
 };
 
-/**
- * Runs a request body through a DTO the way the ValidationPipe does and
- * returns the converted DTO plus the names of the fields that failed.
- */
+// does the same thing the ValidationPipe does and returns which fields failed
 async function errorsFor<T extends object>(cls: new () => T, input: object) {
   const dto = plainToInstance(cls, input);
   const errors = await validate(dto, {
