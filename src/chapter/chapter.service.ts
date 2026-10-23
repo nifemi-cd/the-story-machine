@@ -5,12 +5,14 @@ import { AppException } from '../common/exceptions/app.exception.js';
 import { StoryService } from '../story/story.service.js';
 import { CreateChapterDto } from './dto/create-chapter.dto.js';
 import { UpdateChapterDto } from './dto/update-chapter.dto.js';
+import { ScriptDto } from './dto/script.dto.js';
+import { checkScript, toStoredScript } from './check-script.js';
 import { Chapter, type ChapterDocument } from './entities/chapter.entity.js';
 
 /**
- * Business logic for a story's chapters: adding, listing, lookup and
- * updates. Every lookup is scoped to the story in the URL, so a chapter id
- * from another story is a 404.
+ * Business logic for a story's chapters: adding, listing, lookup, updates,
+ * saving scripts and the reader view. Every lookup is scoped to the story in
+ * the URL, so a chapter id from another story is a 404.
  */
 @Injectable()
 export class ChapterService {
@@ -55,7 +57,7 @@ export class ChapterService {
 
   /**
    * Returns all of the story's chapters in reading order, without their
-   * contents (load a single chapter for that).
+   * scripts (load a single chapter for that).
    *
    * @throws AppException 404 if the story doesn't exist
    */
@@ -64,13 +66,13 @@ export class ChapterService {
 
     return await this.chapterModel
       .find({ storyId })
-      .select('-contents')
+      .select('-script')
       .sort({ order: 1 })
       .exec();
   }
 
   /**
-   * Returns a single chapter of the story, including its contents.
+   * Returns a single chapter of the story, including its script.
    *
    * @throws AppException 404 if the story has no chapter with this id
    */
@@ -111,5 +113,67 @@ export class ChapterService {
       await this.storyService.renameChapter(storyId, id, chapter.title);
     }
     return chapter;
+  }
+
+  /**
+   * Replaces the chapter's script with one parsed by the frontend, after
+   * checking it against the story (see check-script.ts).
+   *
+   * @throws AppException 400 listing every problem if the script is invalid
+   * @throws AppException 404 if the story, or its chapter with this id, doesn't exist
+   */
+  async saveScript(
+    storyId: Types.ObjectId,
+    id: Types.ObjectId,
+    scriptDto: ScriptDto,
+  ): Promise<ChapterDocument> {
+    // Dialogue is checked against the story's characters
+    const story = await this.storyService.findOne(storyId);
+    const errors = checkScript(scriptDto, story.characters);
+    if (errors.length) {
+      throw AppException.validation(errors, 'Script is invalid');
+    }
+
+    const chapter = await this.chapterModel
+      .findOneAndUpdate(
+        { _id: id, storyId },
+        { script: toStoredScript(scriptDto) },
+        { returnDocument: 'after', runValidators: true },
+      )
+      .exec();
+    if (!chapter) {
+      throw AppException.notfound('Chapter not found');
+    }
+    return chapter;
+  }
+
+  /**
+   * Returns the chapter in the shape the reader plays: the story JSON
+   * contract, with the story's details and characters around the script.
+   * A chapter without a script yet gets an empty one, which the reader
+   * shows as the ending screen.
+   *
+   * @throws AppException 404 if the story, or its chapter with this id, doesn't exist
+   */
+  async findForReader(storyId: Types.ObjectId, id: Types.ObjectId) {
+    const [chapter, { story, author }] = await Promise.all([
+      this.findOne(storyId, id),
+      this.storyService.findWithAuthorName(storyId),
+    ]);
+    // toJSON turns the flags Map into a plain object
+    const { script } = chapter.toJSON();
+
+    return {
+      title: story.title,
+      author,
+      story_id: story._id.toString(),
+      chapter_id: chapter._id.toString(),
+      chapter_name: chapter.title,
+      // The contract keys characters by name
+      characters: Object.fromEntries(
+        story.toJSON().characters.map((c) => [c.name, c]),
+      ),
+      story: script ?? { flags: {}, variables: [], lines: [] },
+    };
   }
 }

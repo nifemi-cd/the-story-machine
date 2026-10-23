@@ -39,20 +39,47 @@ describe('CreateStoryDto', () => {
     expect(dto.description).toBe('A storm.');
   });
 
-  it('accepts a valid presentation', async () => {
-    const { fields } = await errorsFor(CreateStoryDto, {
+  it('accepts characters in the contract shape', async () => {
+    const { dto, fields } = await errorsFor(CreateStoryDto, {
       ...valid,
-      presentation: { font: 'Georgia', textColor: '#1a1a1a' },
+      characters: [
+        {
+          name: ' Dave ',
+          description: null,
+          emotions: [
+            { emotion: 'default', portrait_x: null, portrait_y: null },
+            { emotion: 'angry' },
+          ],
+        },
+        { name: 'Cindy' },
+      ],
     });
 
     expect(fields).toEqual([]);
+    expect(dto.characters?.[0].name).toBe('Dave');
   });
 
   it.each([
     ['authorId', { authorId: 'not-an-id' }],
     ['title', { title: '   ' }],
     ['title', { title: 'x'.repeat(121) }],
-    ['presentation', { presentation: { textColor: 'red' } }],
+    ['characters', { characters: [{ name: 'Dave' }, { name: 'Dave' }] }],
+    [
+      'characters',
+      {
+        characters: [
+          { name: 'Dave', emotions: [{ emotion: 'sad' }, { emotion: 'sad' }] },
+        ],
+      },
+    ],
+    [
+      'characters',
+      {
+        characters: [
+          { name: 'Dave', emotions: [{ emotion: 'sad', portrait_x: 3 }] },
+        ],
+      },
+    ],
   ])('rejects an invalid %s', async (field, override) => {
     expect(
       (await errorsFor(CreateStoryDto, { ...valid, ...override })).fields,

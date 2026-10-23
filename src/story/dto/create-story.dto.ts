@@ -1,6 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  ArrayUnique,
+  IsArray,
   IsMongoId,
   IsNotEmpty,
   IsOptional,
@@ -8,7 +11,7 @@ import {
   MaxLength,
   ValidateNested,
 } from 'class-validator';
-import { PresentationDto } from './presentation.dto.js';
+import { CharacterDto } from './character.dto.js';
 
 // Trim before validation so "  " counts as empty
 const trim = ({ value }: { value: unknown }) =>
@@ -46,10 +49,19 @@ export class CreateStoryDto {
   @MaxLength(2000)
   description?: string;
 
-  @ApiPropertyOptional({ type: PresentationDto })
+  @ApiPropertyOptional({
+    description:
+      'Everyone who speaks in the story. On PATCH the whole list is replaced.',
+    type: [CharacterDto],
+  })
   @IsOptional()
-  // Turns the plain object into a PresentationDto so its own rules run
-  @ValidateNested()
-  @Type(() => PresentationDto)
-  presentation?: PresentationDto;
+  @IsArray()
+  @ArrayMaxSize(100)
+  @ArrayUnique((character: CharacterDto) => character.name, {
+    message: 'characters must have unique names',
+  })
+  // Turns each plain object into a CharacterDto so its own rules run
+  @ValidateNested({ each: true })
+  @Type(() => CharacterDto)
+  characters?: CharacterDto[];
 }

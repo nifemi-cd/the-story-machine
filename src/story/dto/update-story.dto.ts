@@ -8,7 +8,8 @@ import { CreateStoryDto } from './create-story.dto.js';
  * field is optional so clients send only what changes.
  *
  * The author can't be changed. Sending a status publishes or unpublishes the
- * story, and the server sets publishedAt to match.
+ * story, and the server sets publishedAt to match. Sending characters
+ * replaces the whole list.
  */
 export class UpdateStoryDto extends PartialType(
   OmitType(CreateStoryDto, ['authorId'] as const),

@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { ScriptDto } from './script.dto.js';
 
 /** A chapter as the API returns it, for the Swagger docs. */
 export class ChapterResponseDto {
@@ -19,13 +20,11 @@ export class ChapterResponseDto {
 
   @ApiProperty({
     description:
-      'Parsed chapter for the reader (format not settled yet). Left out of chapter lists.',
-    type: 'object',
-    additionalProperties: true,
+      'Parsed script for the reader; null until one is saved. Left out of chapter lists.',
+    type: ScriptDto,
     nullable: true,
-    example: null,
   })
-  contents: Record<string, unknown> | null;
+  script: ScriptDto | null;
 
   @ApiProperty({ example: '2026-10-17T21:30:00.000Z' })
   createdAt: Date;

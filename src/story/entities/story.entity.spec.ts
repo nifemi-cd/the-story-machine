@@ -17,13 +17,28 @@ describe('StorySchema', () => {
       draftUrl: null,
       publishedAt: null,
       chapterOrder: [],
-      presentation: { font: '', textColor: '', windowColor: '' },
+      characters: [],
       likeCount: 0,
       commentCount: 0,
       readCount: 0,
     });
     expect(json).not.toHaveProperty('__v');
-    // Sub-documents don't get their own ids
-    expect(json.presentation).not.toHaveProperty('_id');
+  });
+
+  it('stores characters without sub-document ids', () => {
+    const StoryModel = model(Story.name, StorySchema);
+    const story = new StoryModel({
+      authorId: new Types.ObjectId(),
+      title: 'The Lighthouse Keeper',
+      characters: [{ name: 'Dave', emotions: [{ emotion: 'default' }] }],
+    });
+
+    expect(JSON.parse(JSON.stringify(story)).characters).toStrictEqual([
+      {
+        name: 'Dave',
+        description: null,
+        emotions: [{ emotion: 'default', portrait_x: null, portrait_y: null }],
+      },
+    ]);
   });
 });
