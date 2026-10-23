@@ -38,15 +38,15 @@ These tests check the the different parts of the webapp works together, the back
 
 ### Back end testing
 
-We tested the NestJS API with **Vitest** and Nest's testing module (`@nestjs/testing`), which builds just the parts of the app a test needs. In unit tests the MongoDB models are replaced with mocks, so the tests run without a database and we control exactly what each query returns, including "not found" results and database errors. The end-to-end test uses **supertest** to send real HTTP requests to the whole app.
+We tested the NestJS API with **Vitest** and Nest's testing module (`@nestjs/testing`), which builds just the parts of the app a test needs. In unit tests the MongoDB models are replaced with mocks, so the tests run without a database and we control exactly what each query returns, including "not found" results and database errors. The end-to-end tests use **supertest** to send real HTTP requests to the whole app, running against an in-memory MongoDB (**mongodb-memory-server**).
 
-| Command              | What it runs                                            |
-| -------------------- | ------------------------------------------------------- |
-| `npm test`           | All unit tests once (this is what CI runs)              |
-| `npm run test:cov`   | The unit tests with a coverage report                   |
-| `npm run test:e2e`   | The end-to-end tests (needs a running MongoDB)          |
+| Command            | What it runs                                                              |
+| ------------------ | ------------------------------------------------------------------------- |
+| `npm test`         | The unit tests                                                            |
+| `npm run test:e2e` | The end-to-end tests (nothing to set up, they start their own MongoDB)    |
+| `npm run test:cov` | Both, with one coverage report for the whole backend (this is what CI runs) |
 
-At the end of Sprint 1 we have **149 unit tests in 17 files**, and all of them pass.
+At the end of Sprint 1 we have **221 tests**: 158 unit tests in 18 files and 63 end-to-end tests in 4 files. All of them pass, and together they cover **98.9% of the backend's lines**.
 
 #### Unit Tests
 
@@ -56,6 +56,7 @@ These check each part of the backend on its own, mostly the services (the busine
 - **Chapters** (`chapter.service.spec.ts`, `create-chapter.dto.spec.ts`): adding a chapter to the end of its story (and taking it back out if saving fails), returning chapters in the agreed story JSON shape, renaming, and deleting a chapter, which moves the later chapters up one place so the reading order has no gaps.
 - **Chapter scripts** (`check-script.spec.ts`): the checks a script must pass before it is saved. Each line has exactly one kind (dialogue, prose, choice, background, goto_line or end), `line_id` matches the line's position, every jump and flag points to a real line, and dialogue only uses the story's characters and their emotions.
 - **Users** (`user.service.spec.ts`, `create-user.dto.spec.ts`, `user.entity.spec.ts`): registering with a hashed password, rejecting taken emails and usernames with a 409 (case-insensitively, and also when two sign-ups race each other), paging through users and updating profiles. The DTO tests cover the email, username and strong-password rules.
+- **File storage** (`storage.service.spec.ts`): saving, reading and deleting draft files in Azure Blob Storage, with Azure's client replaced by a mock so the tests never contact Azure. They also check that deleting a file that's already gone is fine, and that any other delete failure is logged rather than ignored, so a leftover file can be found and cleaned up.
 - **Shared pieces** (`src/common`): the response wrapper that puts every reply in `{ success, message, data }`, the error filter that turns every error into the same shape (and hides the details of unexpected errors), the pipe that rejects invalid ids, and the pagination defaults and limits.
 
 #### Contract Tests
@@ -64,13 +65,19 @@ The frontend's reader and the backend have to agree on the story JSON format, so
 
 #### End-to-End Tests
 
-`test/app.e2e-spec.ts` starts the whole app and sends a real request to the root route (`GET /`), checking the response comes back in the `{ success, message, data }` wrapper. It connects to a real MongoDB, so it isn't part of CI yet (see section 3).
+These start the whole app exactly as it runs for real (the same modules, validation, response format and `/api/v1` URLs) and send real HTTP requests to every route. Each test file gets its own throwaway in-memory MongoDB, and Azure storage is replaced with an in-memory fake (`test/support/`), so the tests need no secrets or internet and never touch our real data. That also means they run in CI.
+
+- **Users** (`user.e2e-spec.ts`): registering, duplicate emails and usernames, weak passwords, paging through users and updating profiles, and that a password is never sent back.
+- **Stories** (`story.e2e-spec.ts`): creating, listing and filtering, publishing and unpublishing, deleting, and the draft file: uploading a `.txt`, replacing it, downloading it as plain text, and rejecting a missing file, a file that isn't plain text and a file over 10 MB.
+- **Chapters** (`chapter.e2e-spec.ts`): adding a chapter with and without its script, getting it back in the story JSON format, rejecting invalid scripts, saving a new script, deleting a chapter (later chapters move up), and that a chapter can't be reached through a different story.
+- **App** (`app.e2e-spec.ts`): the app starts and answers in the `{ success, message, data }` wrapper.
+
+Across these, the tests also check invalid ids (400), missing records (404) and fields a client isn't allowed to send.
 
 #### Gaps
 
-- The end-to-end tests don't cover the story and chapter routes yet, only the root route.
-- The storage service, which saves draft files to Azure Blob Storage, is mocked in the story tests but has no tests of its own.
-- There is no minimum coverage that CI enforces.
+- There is no minimum coverage that CI enforces yet.
+- The tests replace Azure with a mock or a fake, so nothing checks our code against the real Azure Blob Storage.
 
 ## 3 CI Status
 
@@ -94,7 +101,7 @@ On GitHub Actions, each repository has a workflow called **CI**. It runs wheneve
 1. **Install** (`npm ci`): installs the package versions in `package-lock.json`.
 2. **Lint** (`npm run lint` / `npm run lint:ci`)
 3. **Format check** (`npm run format:check`): makes sure the code follows our Prettier style.
-4. **Unit tests**: runs all our Vitest tests once.
+4. **Tests**: the frontend runs its Vitest tests once. The backend runs its unit and end-to-end tests together with a coverage report (`npm run test:cov`).
 5. **Build** (`npm run build`): makes sure the project actually compiles.
 6. **Security audit** (`npm audit --omit=dev --audit-level=high`): fails if a package that ships to users has a vulnerability.
 
@@ -105,7 +112,7 @@ On GitHub Actions, each repository has a workflow called **CI**. It runs wheneve
 **As the pipeline matures:** we plan to add some more checks:
 
 - **Coverage threshold:** make CI fail if test coverage drops below a set percentage
-- **End-to-end tests in CI:** add a step that runs the backend's end-to-end tests (`npm run test:e2e`), which aren't part of CI yet, and a frontend job that runs browser tests (through Playwright for example)
+- **Browser tests in CI:** the backend's end-to-end tests already run in CI; we plan to add a frontend job that runs browser tests too (through Playwright for example)
 
 ## 4 API Documentation
 
