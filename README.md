@@ -53,7 +53,7 @@ Start the app in watch mode:
 npm run start:dev
 ```
 
-The server listens on port `3000` by default, or on the port set in `PORT`.
+The server listens on port `4563` by default, or on the port set in `PORT`.
 Routes use the `/api` prefix and URI version `v1`; for example:
 
 - `GET /api/v1` — root greeting
